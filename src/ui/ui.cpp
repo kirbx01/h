@@ -80,20 +80,11 @@ float CardWidth(const Layout& l) { return std::clamp(l.screenW * 0.40f, 250.0f, 
 
 void Row(Rectangle box, const char* label, bool hover, bool focus, const Font& font)
 {
-    if (focus)
-    {
-        DrawRectangleRec(box, ColorAlpha(COL_BG_DEEP, 140));
-        DrawRectangleLinesEx(box, 1.0f, COL_TEXT_DIM);
-    }
-    else if (hover)
-    {
-        DrawRectangleLinesEx(box, 1.0f, COL_EDGE);
-    }
-
+    DrawRectangleRec(box, COL_TEXT);
+    DrawRectangleLinesEx(box, 1.0f, COL_TEXT);
     const float size = box.height * 0.34f;
     DrawSpacedCentered(font, label, box.x + box.width * 0.5f,
-                       box.y + (box.height - size) * 0.5f, size, size * 0.16f,
-                       hover ? COL_TEXT : COL_TEXT_DIM);
+                       box.y + (box.height - size) * 0.5f, size, size * 0.16f, COL_BG);
 }
 
 void DrawStatus(const Game& g, const char* text)
