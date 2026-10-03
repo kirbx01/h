@@ -40,6 +40,14 @@ scripts/build_web.sh          # needs the emsdk on PATH
 assets and nothing else. `build_windows.sh` does the same for Windows and checks that the
 result is a PE binary before it calls itself done.
 
+`build_web.sh` writes a folder that any static host will serve. Only the compressed audio
+goes into it; if there were no compressed copy to begin with, the WAV is used instead.
+
+Verified here: the Linux build, the smoke test and the emscripten build. The Windows
+cross build has not been run on this machine, because the MinGW-w64 archive it needs did
+not finish downloading; nothing in the tree is Windows-specific beyond the toolchain
+choice, but treat that first `.exe` as unproven.
+
 A plain CMake build works too, and is what the scripts drive:
 
 ```sh
