@@ -3,8 +3,6 @@
 
 namespace witness {
 
-// Input is deliberately thin: each screen decides what a key means, and nothing is
-// handled twice. The play screen reads the movement keys directly in ball.cpp.
 void HandleInput(Game& g)
 {
     const bool confirm  = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
@@ -17,8 +15,7 @@ void HandleInput(Game& g)
     switch (g.screen)
     {
         case SCREEN_INTRO:
-            // Skippable at any point, which is what an accessibility-minded opening
-            // needs to be. Starting the game here also fades straight into gameplay.
+
             if (anyKey || anyClick || confirm)
             {
                 g.settings.introSeen = true;
@@ -44,8 +41,7 @@ void HandleInput(Game& g)
             break;
 
         case SCREEN_ENDING:
-            // The ending can be shortened, but it cannot be jumped into the credits
-            // from the first frame - give the last line its moment.
+
             if ((confirm || anyKey) && g.sceneTime > 2.5f) OpenCredits(g);
             break;
 
@@ -59,4 +55,4 @@ void HandleInput(Game& g)
     }
 }
 
-} // namespace witness
+}
