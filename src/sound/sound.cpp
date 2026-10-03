@@ -95,7 +95,7 @@ void Init()
     if (TryOpen(g_music, g_musicPath, AUDIO_STEMS, AUDIO_STEM_COUNT, std::getenv("IFG_AUDIO")))
     {
         PlayMusicStream(g_music);
-        TraceLog(LOG_INFO, "i forgor: music '%s'", g_musicPath);
+        TraceLog(LOG_WARNING, "i forgor: music '%s'", g_musicPath);
     }
     else
     {
@@ -103,7 +103,7 @@ void Init()
     }
 
     if (TryOpen(g_pop, g_popPath, POP_STEMS, POP_STEM_COUNT))
-        TraceLog(LOG_INFO, "i forgor: click '%s'", g_popPath);
+        TraceLog(LOG_WARNING, "i forgor: click '%s'", g_popPath);
 }
 
 void Update(float dt)
