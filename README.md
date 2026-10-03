@@ -1,3 +1,7 @@
+[![i forgor](https://img.shields.io/badge/game-i%20forgor-000000)](https://github.com/kirbx01/h)
+[![License](https://img.shields.io/badge/license-mixed-personal%20use-orange)](assets/fonts)
+[![Built with raylib](https://img.shields.io/badge/built%20with-raylib-ff3366)](https://www.raylib.com)
+
 # i forgor
 
 A monochrome game about temporary things, built with [raylib](https://www.raylib.com) and
