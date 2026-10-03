@@ -8,12 +8,8 @@ namespace witness {
 
 namespace {
 
-// Opening sequence. Short on purpose: a title, two lines of tone, one instruction,
-// and the arrangement fading up around a ball that rolls in from the dark.
 constexpr float INTRO_LENGTH = 13.4f;
 
-// Ending timeline. Everything is timed rather than triggered by input, so the sequence
-// can be skipped but never reorders itself. render.cpp draws these three moments.
 constexpr float END_OUT = 9.4f;
 
 float EaseInOut(float t)
@@ -24,14 +20,10 @@ float EaseInOut(float t)
 
 void UpdateIntro(Game& g, float dt)
 {
-    (void)dt;   // the opening is a pure timeline
+    (void)dt;
 
     const float t = g.sceneTime;
 
-    // Audio arrives slowly out of the silence.
-    sound::FadeIn(0.30f);   // the track arrives slowly out of the silence
-
-    // The ball rolls in from off-frame; the arrangement fades up behind it, staggered.
     const float roll = EaseInOut((t - 9.4f) / 2.9f);
     g.ball.pos = { BALL_START.x + (-BALL_START.x - 60.0f) * (1.0f - roll), BALL_START.y };
     g.ball.vel = { 0.0f, 0.0f };
@@ -41,7 +33,7 @@ void UpdateIntro(Game& g, float dt)
     if (t >= INTRO_LENGTH)
     {
         g.settings.introSeen = true;
-        StartNewGame(g);   // requests the fade into gameplay itself
+        StartNewGame(g);
     }
 }
 
@@ -50,7 +42,7 @@ void UpdateEnding(Game& g)
     if (g.sceneTime >= END_OUT) OpenCredits(g);
 }
 
-} // namespace
+}
 
 void GoToScreen(Game& g, Screen screen)
 {
@@ -59,8 +51,6 @@ void GoToScreen(Game& g, Screen screen)
     g.sceneTime  = 0.0f;
 }
 
-// Fade to black, swap screens at full black, fade back. Used instead of hard cuts so
-// attempts and stages bleed into each other instead of snapping.
 void RequestTransition(Game& g, Screen screen, float speed)
 {
     g.transition.active  = true;
@@ -128,14 +118,8 @@ void EnterStage(Game& g, int stage)
     g.edgeHintShown = false;
     g.boardReveal  = 1.0f;
 
-    // The previous route becomes history rather than vanishing instantly.
     g.trail.MarkGhost();
     ResetBall(g);
-
-    // The board is deliberately not restored: erased tiles stay erased for the rest
-    // of the session, and for the rest of the installation.
-    sound::ApplyStage(g.board.stage);
-    sound::FadeIn(1.2f);
 
     const char* line = StageTuning(g.board.stage).enterLine;
     if (g.board.stage == 0) g.story.Say(line, 3.4f);
@@ -154,7 +138,7 @@ void RestartAttempt(Game& g, bool fromEdge)
     if (fromEdge && !g.edgeHintShown)
     {
         g.edgeHintShown = true;
-        g.story.Say("IT WENT PAST THE EDGE.", 3.4f);
+        g.story.Say("It Went Past the Edge.", 3.4f);
         return;
     }
 
@@ -178,17 +162,48 @@ void BeginEnding(Game& g)
     g.trail.Clear();
     g.finished = true;
 
-    // The run is over, so the stored consequences go with it: the game forgets that
-    // you ever finished, exactly as it forgets everything else eventually.
     SaveSession(g);
 
-    sound::FadeOut(7.0f);
     RequestTransition(g, SCREEN_ENDING, 2.0f);
 }
 
 void OpenCredits(Game& g)
 {
     RequestTransition(g, SCREEN_CREDITS, 1.1f);
+}
+
+Layout ComputeLayoutFor(float screenW, float screenH)
+{
+    Layout l;
+    l.screenW = std::max(1.0f, screenW);
+    l.screenH = std::max(1.0f, screenH);
+
+    const float shortEdge = std::min(l.screenW, l.screenH);
+    l.margin = std::clamp(shortEdge * 0.022f, 12.0f, 34.0f);
+    l.hintSize = std::clamp(shortEdge * 0.0205f, 12.0f, 19.0f);
+    l.hintSpacing = l.hintSize * 0.16f;
+    l.storySize = std::clamp(shortEdge * 0.0265f, 16.0f, 26.0f);
+    l.storySpacing = l.storySize * 0.20f;
+
+    l.storyY   = l.margin * 0.5f + l.storySize * 0.85f;
+    l.topRowY  = l.storyY + l.storySize * 1.45f;
+
+    const float topBand = l.topRowY + l.hintSize * 1.6f;
+    const float bottomBand = l.margin + l.hintSize * 3.2f;
+
+    const float availW = l.screenW - l.margin * 2.0f;
+    const float availH = l.screenH - topBand - bottomBand;
+    l.scale = std::max(0.05f, std::min(availW / (float)DESIGN_W, availH / (float)DESIGN_H));
+
+    l.viewW = (float)DESIGN_W * l.scale;
+    l.viewH = (float)DESIGN_H * l.scale;
+    l.viewX = (l.screenW - l.viewW) * 0.5f;
+    l.viewY = topBand + (availH - l.viewH) * 0.5f;
+
+    l.controlRow2Y = l.screenH - bottomBand + l.hintSize * 0.35f;
+    l.controlRowY = l.screenH - bottomBand + l.hintSize * 1.85f;
+
+    return l;
 }
 
 void UpdateGame(Game& g, float dt)
@@ -199,7 +214,6 @@ void UpdateGame(Game& g, float dt)
     g.story.Update(dt);
     UpdateBoard(g, dt);
 
-    // Scene transition: two phases, up to black and back down again.
     if (g.transition.active)
     {
         if (g.transition.toBlack)
@@ -233,8 +247,6 @@ void UpdateGame(Game& g, float dt)
         {
             g.stageTime += dt;
 
-            // Freeze the simulation while the screen is fading: no collisions, no
-            // erosion, no trail samples taken while nothing can be seen.
             if (!g.transition.active)
             {
                 UpdateBall(g, dt);
@@ -263,4 +275,4 @@ void UpdateGame(Game& g, float dt)
     }
 }
 
-} // namespace witness
+}
