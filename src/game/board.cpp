@@ -7,15 +7,9 @@ namespace witness {
 
 namespace {
 
-// Tiles are drawn and collided as axis aligned rectangles. Only two orientations
-// are used, which keeps collision exact and cheap while still reading as dominoes.
-constexpr float TILE_SHORT = 36.0f;   // width of a standing tile
-constexpr float TILE_LONG  = 80.0f;   // height of a standing tile
+constexpr float TILE_SHORT = 36.0f;
+constexpr float TILE_LONG  = 80.0f;
 
-// Handcrafted single-screen arrangement. Values are taken from distinct tiles of a
-// standard double-six set. "Keystones" carry very few pips and are drawn brighter:
-// they are the fastest way to break the seal, so a player can discover them by
-// looking rather than by being told.
 constexpr struct
 {
     float x, y;
@@ -24,25 +18,22 @@ constexpr struct
     bool  keystone;
 } LAYOUT[] =
 {
-    // Lower-left drift: the first thing the ball meets.
+
     { 210.0f, 590.0f, false, 6, 6, false },
     { 272.0f, 543.0f, false, 0, 1, true  },
     { 334.0f, 496.0f, false, 5, 5, false },
     { 396.0f, 449.0f, false, 4, 4, false },
 
-    // Middle block, stacked pairs.
     { 566.0f, 424.0f, true,  2, 6, false },
     { 656.0f, 424.0f, true,  5, 6, false },
     { 566.0f, 352.0f, true,  1, 2, true  },
     { 656.0f, 352.0f, true,  3, 3, false },
 
-    // Upper-right knot, directly in front of the door.
     { 948.0f, 300.0f, false, 6, 5, false },
     { 1012.0f, 252.0f, false, 2, 3, true  },
     { 1076.0f, 300.0f, false, 4, 6, false },
     { 1012.0f, 348.0f, false, 0, 3, true  },
 
-    // Strays, so the void is not symmetrical.
     { 470.0f, 604.0f, true,  6, 4, false },
     { 772.0f, 528.0f, false, 3, 5, false },
     { 872.0f, 432.0f, true,  0, 2, true  },
@@ -51,7 +42,7 @@ constexpr struct
 
 static_assert(sizeof(LAYOUT) / sizeof(LAYOUT[0]) == MAX_TILES, "layout must fill the board");
 
-} // namespace
+}
 
 const Vector2 BALL_START = { 104.0f, 652.0f };
 
@@ -93,14 +84,10 @@ void InitBoard(Board& b)
     b.sealNeed = cfg.sealNeed;
 }
 
-// Applies the world's rule set: hard collisions strip pips, and a tile whose pips are
-// all gone stops being solid and leaves only a faint trace of where it stood.
 static void StripTile(Game& g, Domino& d, float impact)
 {
     if (d.gone || d.hitCool > 0.0f) return;
 
-    // A flat run-up costs a couple of pips; hitting it at full speed takes a bigger
-    // bite, which is what makes choosing your approach feel like anything at all.
     const int strip = PIPS_PER_HIT + (impact >= PIPS_BONUS_SPEED ? PIPS_BONUS_HIT : 0);
 
     d.pipsLeft -= strip;
@@ -114,7 +101,6 @@ static void StripTile(Game& g, Domino& d, float impact)
         g.board.emptied++;
         g.board.emptiedTotal++;
 
-        // The seal counts erasures, not damage: the door answers to what is missing.
         if (!g.board.sealOpen && g.board.emptied >= g.board.sealNeed) g.board.sealOpen = true;
     }
 }
@@ -131,9 +117,6 @@ void UpdateBoard(Game& g, float dt)
     g.board.doorPulse += dt;
 }
 
-// Circle against an axis aligned box. Resolves penetration, reflects the normal
-// component of the velocity and keeps some of the tangential speed so glancing hits
-// feel like sliding rather than sticking.
 static bool ResolveCircleBox(Vector2& pos, Vector2& vel, float radius, Rectangle box,
                              float restitution, float& impactOut)
 {
@@ -153,7 +136,7 @@ static bool ResolveCircleBox(Vector2& pos, Vector2& vel, float radius, Rectangle
     }
     else
     {
-        // Dead centre inside the box: escape through the nearest face.
+
         const float left   = pos.x - box.x;
         const float right  = box.x + box.width - pos.x;
         const float top    = pos.y - box.y;
@@ -175,7 +158,6 @@ static bool ResolveCircleBox(Vector2& pos, Vector2& vel, float radius, Rectangle
     {
         vel = VSub(vel, VScale(n, vn * (1.0f + restitution)));
 
-        // Light tangential loss keeps bounces from turning into pinball.
         const Vector2 tangent = VSub(vel, VScale(n, VDot(vel, n)));
         vel = VSub(vel, VScale(tangent, 0.14f));
     }
@@ -187,7 +169,6 @@ bool BallInDoor(const Game& g)
 {
     if (!g.board.sealOpen) return false;
 
-    // Small inset so the ball has to actually enter the doorway.
     const Rectangle inner = { DOOR_X + 14.0f, DOOR_Y + 12.0f, DOOR_W - 28.0f, DOOR_H - 24.0f };
     return g.ball.pos.x > inner.x && g.ball.pos.x < inner.x + inner.width &&
            g.ball.pos.y > inner.y && g.ball.pos.y < inner.y + inner.height;
@@ -212,8 +193,6 @@ void UpdateBall(Game& g, float dt)
     const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
     if (len > 0.0f) dir = VScale(dir, 1.0f / len);
 
-    // Accelerate while steering, coast with a little drag when not. Momentum is
-    // deliberate but restrained: you can always change your mind.
     if (len > 0.0f) b.vel = VAdd(b.vel, VScale(dir, BALL_ACCEL * dt));
     else            b.vel = VScale(b.vel, std::exp(-BALL_DRAG * dt));
 
@@ -225,8 +204,13 @@ void UpdateBall(Game& g, float dt)
 
     b.pos = VAdd(b.pos, VScale(b.vel, dt));
 
-    // Squash relaxes back towards a circle; stretch is driven by the current speed.
-    b.squash = std::max(0.0f, b.squash - dt * 4.2f);
+    b.squashVel += (-BALL_SQUASH_STIFFNESS * b.squash - BALL_SQUASH_DAMPING * b.squashVel) * dt;
+    b.squash += b.squashVel * dt;
+    if (std::abs(b.squash) < 0.001f && std::abs(b.squashVel) < 0.001f)
+    {
+        b.squash = 0.0f;
+        b.squashVel = 0.0f;
+    }
 
     float strongestImpact = 0.0f;
     float strongestAngle  = 0.0f;
@@ -257,27 +241,25 @@ void UpdateBall(Game& g, float dt)
             strongestImpact = std::max(strongestImpact, impact);
             strongestAngle  = std::atan2(-(b.vel.y), -(b.vel.x));
 
-            // Restrained nudge toward the idea that something is holding the door.
             if (!g.doorHintShown)
             {
                 g.doorHintShown = true;
-                g.story.Say("SOMETHING IS HOLDING IT.", 3.6f);
+                g.story.Say("Something Is Holding It.", 3.6f);
             }
         }
     }
 
     if (strongestImpact > 0.0f)
     {
-        const float amount = std::min(0.5f, strongestImpact / 900.0f + 0.12f);
+        const float amount = std::min(BALL_SQUASH_MAX, strongestImpact / 900.0f + 0.12f);
         if (amount > b.squash)
         {
             b.squash      = amount;
+            b.squashVel   = 0.0f;
             b.impactAngle = strongestAngle;
         }
     }
 
-    // No walls in a void: leave the frame and the ball is gone. The attempt ends,
-    // but the trace it drew stays behind for a while.
     const float m = 26.0f;
     if (b.pos.x < -m || b.pos.x > SCREEN_W + m || b.pos.y < -m || b.pos.y > SCREEN_H + m)
     {
@@ -287,4 +269,4 @@ void UpdateBall(Game& g, float dt)
     }
 }
 
-} // namespace witness
+}
