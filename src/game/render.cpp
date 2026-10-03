@@ -136,13 +136,11 @@ void DrawTile(const Domino& d, float alpha)
         return;
     }
 
-    const int grey = (int)(196.0f - 90.0f * (d.keystone ? 0.85f : 0.55f) - 150.0f * d.hitFlash);
-    const unsigned char v = (unsigned char)std::clamp(grey, 12, 255);
-    const Color edge = ColorAlpha({ v, v, v, 255 }, alpha);
-    const Color fill = ColorAlpha({ v, v, v, 255 }, alpha * 0.22f);
+    const Color edge = ColorAlpha(COL_TEXT, alpha);
+    const Color fill = ColorAlpha(COL_TEXT, alpha * 0.06f);
 
-    DrawRectangleRounded(r, CORNER_R, 4, fill);
-    DrawRectangleRoundedLinesEx(r, CORNER_R, 4, 1.0f, edge);
+    DrawRectangleRounded(r, CORNER_R * 0.8f, 4, fill);
+    DrawRectangleRoundedLinesEx(r, CORNER_R * 0.8f, 4, 2.0f, edge);
 
     const bool longIsY = !d.horizontal;
     Rectangle halfA, halfB;
@@ -161,26 +159,29 @@ void DrawTile(const Domino& d, float alpha)
                  (int)(r.x + r.width * 0.5f), (int)(r.y + r.height) - 4, edge);
     }
 
-    Vector2 listA[6], listB[6];
-    const int nA = HalfPips(halfA, longIsY, d.valueA, listA);
-    const int nB = HalfPips(halfB, longIsY, d.valueB, listB);
+    const float pad = std::min(halfA.width, halfA.height) * 0.28f;
+    const float dot = std::min(halfA.width, halfA.height) * 0.14f;
+    const Color ink = edge;
 
-    int drawn = 0;
-    for (int i = 0; i < nA + nB && drawn < d.pipsLeft; i++)
-    {
-        const bool takeA = (i % 2) == 0;
-        const int idx = i / 2;
-        Vector2 p;
-        if (takeA) { if (idx >= nA) break; p = listA[idx]; }
-        else       { if (idx >= nB) break; p = listB[idx]; }
-
-        p.x = std::clamp(p.x, r.x + 5.0f, r.x + r.width - 5.0f);
-        p.y = std::clamp(p.y, r.y + 5.0f, r.y + r.height - 5.0f);
-        DrawCircleV(p, 3.6f, ColorAlpha(d.keystone ? COL_TEXT : COL_TEXT_DIM, alpha));
-        drawn++;
-    }
+    auto drawDots = [&](int val, const Rectangle& h) {
+        Vector2 p[7][7] = {
+            {{h.x + h.width*0.5f, h.y + h.height*0.5f}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + h.height - pad}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}, {h.x + h.width - pad, h.y + h.height - pad}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + h.width*0.5f, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height - pad}},
+            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + h.width*0.5f, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}}
+        };
+        int n[] = {1,2,3,4,5,6,7};
+        if(val<0) val=0; if(val>6) val=6;
+        int c=n[val];
+        const auto& pts=p[val];
+        for(int i=0;i<c;i++) DrawCircleV(pts[i], dot, ink);
+    };
+    drawDots(d.valueA, halfA);
+    drawDots(d.valueB, halfB);
 }
-
 void DrawDoorShape(const Game& g, float alpha)
 {
     if (alpha <= 0.001f) return;
