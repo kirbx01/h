@@ -2,10 +2,7 @@ build/
 build-*/
 dist/
 i_forgor
-after_the_fall
 *.o
 *.d
 *.a
 external/
-assets/bg.png
-assets/*.png
