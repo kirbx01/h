@@ -3,6 +3,7 @@
 #include "sound.h"
 #include "ui.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 using namespace witness;
@@ -10,26 +11,22 @@ using namespace witness;
 int main(void)
 {
     SetTraceLogLevel(LOG_WARNING);
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_FULLSCREEN_MODE);
     InitWindow(SCREEN_W, SCREEN_H, GAME_TITLE);
     SetTargetFPS(TARGET_FPS);
-    SetExitKey(KEY_NULL);          // the game owns ESC itself
+    SetExitKey(KEY_NULL);
 
     Game g;
 
-    int fontSize = UI_FONT_SIZE;
-    g.font = LoadUiFont(g.fontLoaded, fontSize);
-    StyleUi(g.font);
+    LoadFonts(g);
+    LoadBackground(g);
+    StyleUi();
+    g.itchUrl = ResolveItchUrl();
 
-    g.bgLoaded = LoadBackground(g);
-    g.itchUrl  = ResolveItchUrl();
-
-    // A stored session restores the board as it was left, tiles and all. A finished run
-    // is remembered only as the fact that it happened.
     if (LoadSession(g))
     {
         g.settings.introSeen = true;
-        g.hasSave            = !g.finished;
+        g.hasSave = !g.finished;
     }
 
     if (g.settings.skipIntro && g.settings.introSeen) GoToScreen(g, SCREEN_MENU);
@@ -38,19 +35,18 @@ int main(void)
 
     while (!WindowShouldClose())
     {
-        // A clamped dt keeps a hitch from teleporting the ball through the arrangement.
-        float dt = GetFrameTime();
-        if (dt > 0.05f) dt = 0.05f;
-        if (dt < 0.0f) dt = 0.0f;
+        if (IsKeyPressed(KEY_F11)) ToggleFullscreen();
 
-        // Browsers only allow audio after a gesture; this is a no-op on desktop.
+        float dt = GetFrameTime();
+        dt = std::clamp(dt, 0.0f, 0.05f);
+
         sound::NotifyUserGesture();
 
         HandleInput(g);
         UpdateGame(g, dt);
 
         sound::SetMasterVolume(g.settings.volume);
-        sound::Update(dt, g.screen);
+        sound::Update(dt);
 
         DrawFrame(g);
     }
@@ -58,10 +54,8 @@ int main(void)
     if (g.screen == SCREEN_PLAYING || g.screen == SCREEN_PAUSE) SaveSession(g);
 
     sound::Shutdown();
-
     UnloadBackground(g);
-    if (g.fontLoaded) UnloadFont(g.font);
-
+    UnloadFonts(g);
     platform::Shutdown();
     CloseWindow();
     return EXIT_SUCCESS;
