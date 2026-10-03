@@ -1,17 +1,266 @@
 #include "game.h"
+#include "sound.h"
+
+#include <algorithm>
+#include <cmath>
 
 namespace witness {
+
+namespace {
+
+// Opening sequence. Short on purpose: a title, two lines of tone, one instruction,
+// and the arrangement fading up around a ball that rolls in from the dark.
+constexpr float INTRO_LENGTH = 13.4f;
+
+// Ending timeline. Everything is timed rather than triggered by input, so the sequence
+// can be skipped but never reorders itself. render.cpp draws these three moments.
+constexpr float END_OUT = 9.4f;
+
+float EaseInOut(float t)
+{
+    t = std::clamp(t, 0.0f, 1.0f);
+    return t < 0.5f ? 2.0f * t * t : 1.0f - std::pow(-2.0f * t + 2.0f, 2.0f) * 0.5f;
+}
+
+void UpdateIntro(Game& g, float dt)
+{
+    (void)dt;   // the opening is a pure timeline
+
+    const float t = g.sceneTime;
+
+    // Audio arrives slowly out of the silence.
+    sound::FadeIn(0.30f);   // the track arrives slowly out of the silence
+
+    // The ball rolls in from off-frame; the arrangement fades up behind it, staggered.
+    const float roll = EaseInOut((t - 9.4f) / 2.9f);
+    g.ball.pos = { BALL_START.x + (-BALL_START.x - 60.0f) * (1.0f - roll), BALL_START.y };
+    g.ball.vel = { 0.0f, 0.0f };
+    g.ballReveal = std::clamp((t - 9.4f) / 1.6f, 0.0f, 1.0f);
+    g.boardReveal = std::clamp((t - 10.6f) / 2.2f, 0.0f, 1.0f);
+
+    if (t >= INTRO_LENGTH)
+    {
+        g.settings.introSeen = true;
+        StartNewGame(g);   // requests the fade into gameplay itself
+    }
+}
+
+void UpdateEnding(Game& g)
+{
+    if (g.sceneTime >= END_OUT) OpenCredits(g);
+}
+
+} // namespace
 
 void GoToScreen(Game& g, Screen screen)
 {
     if (g.screen == screen) return;
-    g.screen = screen;
-    if (screen == SCREEN_PLAYING) g.elapsed = 0.0f;
+    g.screen     = screen;
+    g.sceneTime  = 0.0f;
+}
+
+// Fade to black, swap screens at full black, fade back. Used instead of hard cuts so
+// attempts and stages bleed into each other instead of snapping.
+void RequestTransition(Game& g, Screen screen, float speed)
+{
+    g.transition.active  = true;
+    g.transition.toBlack = true;
+    g.transition.target  = screen;
+    g.transition.speed   = speed;
+
+    if (g.transition.t < 0.0f) g.transition.t = 0.0f;
+    if (g.transition.t > 1.0f) g.transition.t = 1.0f;
+}
+
+void ResetBall(Game& g)
+{
+    g.ball.pos    = BALL_START;
+    g.ball.vel    = { 0.0f, 0.0f };
+    g.ball.squash = 0.0f;
+    g.ball.lost   = false;
+    g.ball.lostTimer = 0.0f;
+    g.ballReveal  = 1.0f;
+}
+
+void StartNewGame(Game& g)
+{
+    InitBoard(g.board);
+    g.trail.Clear();
+    g.story.line.clear();
+    g.boardReveal = 1.0f;
+    g.attempt   = 0;
+    g.finished  = false;
+    g.hasSave   = false;
+
+    ClearSession();
+
+    EnterStage(g, 0);
+    RequestTransition(g, SCREEN_PLAYING, 2.4f);
+}
+
+void ContinueGame(Game& g, bool saved)
+{
+    if (saved && LoadSession(g))
+    {
+        g.hasSave = true;
+        g.trail.Clear();
+        EnterStage(g, g.board.stage);
+        g.statusNote = "resumed from where you left it.";
+        RequestTransition(g, SCREEN_PLAYING, 2.4f);
+    }
+    else
+    {
+        StartNewGame(g);
+    }
+}
+
+void EnterStage(Game& g, int stage)
+{
+    g.board.stage    = std::clamp(stage, 0, STAGE_COUNT - 1);
+    g.board.emptied  = 0;
+    g.board.sealNeed = StageTuning(g.board.stage).sealNeed;
+    g.board.sealOpen = false;
+    g.board.doorPulse = 0.0f;
+
+    g.attempt   = 0;
+    g.stageTime = 0.0f;
+    g.doorHintShown = false;
+    g.edgeHintShown = false;
+    g.boardReveal  = 1.0f;
+
+    // The previous route becomes history rather than vanishing instantly.
+    g.trail.MarkGhost();
+    ResetBall(g);
+
+    // The board is deliberately not restored: erased tiles stay erased for the rest
+    // of the session, and for the rest of the installation.
+    sound::ApplyStage(g.board.stage);
+    sound::FadeIn(1.2f);
+
+    const char* line = StageTuning(g.board.stage).enterLine;
+    if (g.board.stage == 0) g.story.Say(line, 3.4f);
+    else                   g.story.Say(line, 4.2f);
+
+    SaveSession(g);
+}
+
+void RestartAttempt(Game& g, bool fromEdge)
+{
+    g.trail.MarkGhost();
+    ResetBall(g);
+    g.stageTime = 0.0f;
+    g.attempt++;
+
+    if (fromEdge && !g.edgeHintShown)
+    {
+        g.edgeHintShown = true;
+        g.story.Say("IT WENT PAST THE EDGE.", 3.4f);
+        return;
+    }
+
+    g.story.Say(StageTuning(g.board.stage).retryLine, 3.4f);
+}
+
+void AdvanceStage(Game& g)
+{
+    if (g.board.stage >= STAGE_COUNT - 1)
+    {
+        BeginEnding(g);
+        return;
+    }
+
+    g.pendingStage = g.board.stage + 1;
+    RequestTransition(g, SCREEN_CLEAR, 4.0f);
+}
+
+void BeginEnding(Game& g)
+{
+    g.trail.Clear();
+    g.finished = true;
+
+    // The run is over, so the stored consequences go with it: the game forgets that
+    // you ever finished, exactly as it forgets everything else eventually.
+    SaveSession(g);
+
+    sound::FadeOut(7.0f);
+    RequestTransition(g, SCREEN_ENDING, 2.0f);
+}
+
+void OpenCredits(Game& g)
+{
+    RequestTransition(g, SCREEN_CREDITS, 1.1f);
 }
 
 void UpdateGame(Game& g, float dt)
 {
-    if (g.screen == SCREEN_PLAYING) g.elapsed += dt;
+    g.clock    += dt;
+    g.sceneTime += dt;
+
+    g.story.Update(dt);
+    UpdateBoard(g, dt);
+
+    // Scene transition: two phases, up to black and back down again.
+    if (g.transition.active)
+    {
+        if (g.transition.toBlack)
+        {
+            g.transition.t += g.transition.speed * dt;
+            if (g.transition.t >= 1.0f)
+            {
+                g.transition.t = 1.0f;
+                GoToScreen(g, g.transition.target);
+                g.transition.toBlack = false;
+            }
+        }
+        else
+        {
+            g.transition.t -= g.transition.speed * dt;
+            if (g.transition.t <= 0.0f)
+            {
+                g.transition.t = 0.0f;
+                g.transition.active = false;
+            }
+        }
+    }
+
+    switch (g.screen)
+    {
+        case SCREEN_INTRO:
+            UpdateIntro(g, dt);
+            break;
+
+        case SCREEN_PLAYING:
+        {
+            g.stageTime += dt;
+
+            // Freeze the simulation while the screen is fading: no collisions, no
+            // erosion, no trail samples taken while nothing can be seen.
+            if (!g.transition.active)
+            {
+                UpdateBall(g, dt);
+                UpdateTrail(g, dt);
+
+                if (g.ball.lost && g.ball.lostTimer > 0.55f) RestartAttempt(g, true);
+                if (BallInDoor(g))                       AdvanceStage(g);
+            }
+            break;
+        }
+
+        case SCREEN_CLEAR:
+            if (g.sceneTime > 1.9f && !g.transition.active)
+            {
+                EnterStage(g, g.pendingStage);
+                RequestTransition(g, SCREEN_PLAYING, 2.6f);
+            }
+            break;
+
+        case SCREEN_ENDING:
+            UpdateEnding(g);
+            break;
+
+        default:
+            break;
+    }
 }
 
-}
+} // namespace witness
