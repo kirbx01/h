@@ -11,7 +11,7 @@ using namespace witness;
 int main(void)
 {
     SetTraceLogLevel(LOG_WARNING);
-    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_FULLSCREEN_MODE);
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
     InitWindow(SCREEN_W, SCREEN_H, GAME_TITLE);
     SetTargetFPS(TARGET_FPS);
     SetExitKey(KEY_NULL);
@@ -31,6 +31,7 @@ int main(void)
 
     if (g.settings.skipIntro && g.settings.introSeen) GoToScreen(g, SCREEN_MENU);
 
+    sound::SetMuted(g.settings.muted);
     sound::Init();
 
     while (!WindowShouldClose())

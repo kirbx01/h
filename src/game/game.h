@@ -15,7 +15,7 @@ inline float   VDot(Vector2 a, Vector2 b) { return a.x * b.x + a.y * b.y; }
 inline float   VLen(Vector2 a)           { return std::sqrt(a.x * a.x + a.y * a.y); }
 
 constexpr int SCREEN_W   = 1280;
-constexpr int SCREEN_H   = 720;
+constexpr int SCREEN_H   = 680;
 constexpr int TARGET_FPS = 60;
 
 constexpr int DESIGN_W = SCREEN_W;
