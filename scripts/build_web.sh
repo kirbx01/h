@@ -12,7 +12,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUILD_DIR="${BUILD_DIR:-build-web}"
-DIST_DIR="${DIST_DIR:-dist/after_the_fall-web}"
+DIST_DIR="${DIST_DIR:-dist/i_forgor-web}"
 
 if ! command -v emcmake >/dev/null 2>&1; then
     echo "emcmake is not on PATH." >&2
@@ -46,10 +46,10 @@ echo "preloading $(du -sh "$STAGE_DIR" | cut -f1) of audio into the web build"
 emcmake cmake -S . -B "$BUILD_DIR" \
       -DCMAKE_BUILD_TYPE=Release \
       -DPLATFORM=Web \
-      -DATF_WEB_ASSET_DIR="$STAGE_DIR" \
-      -DATF_BUILD_TESTS=OFF \
-      -DATF_BUILD_CAPTURE=OFF \
-      ${ATF_ITCH_URL:+-DATF_ITCH_URL="$ATF_ITCH_URL"}
+      -DIFG_WEB_ASSET_DIR="$STAGE_DIR" \
+      -DIFG_BUILD_TESTS=OFF \
+      -DIFG_BUILD_CAPTURE=OFF \
+      ${IFG_ITCH_URL:+-DIFG_ITCH_URL="$IFG_ITCH_URL"}
 
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
 
@@ -57,7 +57,7 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 # The preloaded folder, the page, the code and the data all have to travel together.
-for f in after_the_fall.html after_the_fall.js after_the_fall.wasm after_the_fall.data; do
+for f in i_forgor.html i_forgor.js i_forgor.wasm i_forgor.data; do
     [ -e "$BUILD_DIR/bin/$f" ] && cp "$BUILD_DIR/bin/$f" "$DIST_DIR/"
 done
 
@@ -65,7 +65,7 @@ done
 if command -v emrun >/dev/null 2>&1; then
     echo
     echo "built $DIST_DIR"
-    echo "try it with:  emrun $BUILD_DIR/bin/after_the_fall.html"
+    echo "try it with:  emrun $BUILD_DIR/bin/i_forgor.html"
 else
     echo
     echo "built $DIST_DIR"

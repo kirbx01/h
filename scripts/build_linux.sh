@@ -13,16 +13,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BUILD_DIR="${BUILD_DIR:-build-linux}"
-DIST_DIR="${DIST_DIR:-dist/after_the_fall-linux-x86_64}"
-NAME="after_the_fall"
+DIST_DIR="${DIST_DIR:-dist/i_forgor-linux-x86_64}"
+NAME="i_forgor"
 
 [ -e external/raylib/CMakeLists.txt ] || scripts/fetch_deps.sh
 
 cmake -S . -B "$BUILD_DIR" \
       -DCMAKE_BUILD_TYPE=Release \
-      -DATF_BUILD_TESTS=ON \
-      -DATF_BUILD_CAPTURE=OFF \
-      ${ATF_ITCH_URL:+-DATF_ITCH_URL="$ATF_ITCH_URL"}
+      -DIFG_BUILD_TESTS=ON \
+      -DIFG_BUILD_CAPTURE=OFF \
+      ${IFG_ITCH_URL:+-DIFG_ITCH_URL="$IFG_ITCH_URL"}
 
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
 
