@@ -1,4 +1,4 @@
-# AFTER THE FALL
+# i forgor
 
 A monochrome game about temporary things, built with [raylib](https://www.raylib.com) and
 [raygui](https://github.com/raysan5/raygui).
@@ -8,7 +8,11 @@ they are gone, and gone stays gone: damage carries across every passage, every r
 every restart. The only thing you build is the trace of where you have just been, and that
 fades too.
 
-There is no colour anywhere in the game, including in the menus.
+The game opens fullscreen on the desktop it is running on, and every layout is computed from
+whatever the window currently is.
+
+The game is drawn in pure `#000000` on `#E0E1E4`, including in the menus. The only artwork
+is `assets/bg.png`, and it is used on the main screen alone.
 
 ## Controls
 
@@ -17,8 +21,12 @@ There is no colour anywhere in the game, including in the menus.
 | `W` `A` `S` `D` or arrow keys | Move the ball |
 | `R` | Begin the passage again |
 | `Esc` | Menu |
+| `F11` | Leave or re-enter fullscreen |
 | `Tab` / `Enter` | Move between and press buttons on the menus |
 | Mouse | Clickable buttons and links |
+
+Two icons sit in the top right while you play: the sliders open the settings, and the
+speaker mutes and unmutes the music without leaving the passage.
 
 ## Building
 
@@ -59,35 +67,30 @@ ctest --test-dir build --output-on-failure
 The Makefile is kept for the fast loop and needs nothing but a C++17 compiler:
 
 ```sh
-make -j      # ./after_the_fall
+make -j      # ./i_forgor
 make test    # headless smoke test
 make capture # writes PNGs of every screen to build-capture/
 ```
 
 ## Music
 
-Two tracks, and each is used where it belongs:
+One track runs under the whole game: the opening, the passages, the menu, the credits and
+the settings screen. It fades in over two and a half seconds and fades out over the last
+one and a half before the window closes. Every button press also plays a short pop.
 
 | File | Where it plays |
 | --- | --- |
-| `assets/baseorignal.wav` | The passages |
-| `assets/openingandclosing.wav` | The opening, the ending, the menu, the credits and the settings screen, including when settings is opened from a pause |
+| `assets/openingandclosing.ogg` | Everywhere |
+| `assets/button_pop.wav` | Button clicks |
 
-Both filenames are probed rather than hardcoded, along with `.ogg`, `.mp3`, `.qoa`, `.xm`
-and `.mod` versions of the same names, and either can be pointed elsewhere with the
-`ATF_AUDIO` and `ATF_AUDIO_FRAME` environment variables. A missing track is never silent
-by accident: the game logs which file it looked for and carries on without music.
+Filenames are probed rather than hardcoded, along with `.wav`, `.mp3`, `.qoa`, `.xm` and
+`.mod` versions of the same name, and the track can be pointed elsewhere with the
+`IFG_AUDIO` environment variable. A missing track is never silent by accident: the game logs
+which file it looked for and carries on without music.
 
-Switching between the two crossfades, and a pause holds whatever was already playing.
-
-The passage track is deliberately degraded as the world deteriorates: each passage turns
-it down, closes a low-pass filter across its top end and starts dropping out of it, which
-is the only sound effect in the game.
-
-`.ogg` copies of both tracks are what the repository carries, because a 43 MB pair of WAV
-files is a heavy thing to ask anyone to clone and an even heavier thing to download in a
-browser. The loader prefers `.ogg`, so if you drop a `.wav` in beside it nothing changes
-for the desktop builds.
+Only the compressed copies are tracked, because a 43 MB pair of WAV files is a heavy thing
+to ask anyone to clone and an even heavier thing to download in a browser. The loader
+prefers `.ogg`.
 
 ## The itch.io link
 
@@ -95,8 +98,8 @@ The credits will not invent a link. They read `assets/itch_url.txt` if it exists
 otherwise the value baked in at build time:
 
 ```sh
-cmake -S . -B build -DATF_ITCH_URL="https://itch.io/your-page"
-make ATF_ITCH_URL="https://itch.io/your-page"
+cmake -S . -B build -DIFG_ITCH_URL="https://itch.io/your-page"
+make IFG_ITCH_URL="https://itch.io/your-page"
 ```
 
 With neither set, the credits say the page is not configured instead of showing a link
@@ -105,8 +108,8 @@ that goes nowhere.
 ## Layout
 
 ```
-src/game/       board, ball, trail, story, screen flow, save file, rendering
-src/sound/      track loading, per-passage degradation, crossfades
+src/game/       board, ball, trail, story, screen flow, save file, responsive layout
+src/sound/      track and pop loading, fades, mute
 src/ui/         raygui menus, settings, credits, the clickable link
 src/input/      per-screen keyboard and mouse handling
 src/platform/   save locations, file access, opening a URL, localStorage on web
@@ -117,3 +120,9 @@ tools/capture.cpp screenshot tool, used to actually look at the screens
 `src/ui/ui.cpp` is the only translation unit that defines `RAYGUI_IMPLEMENTATION`, and
 `make test` links the simulation without it, so the smoke test needs no window, no input
 device and no sound card.
+## Typefaces
+
+`assets/fonts/seratonin` sets the body text and `assets/fonts/dosmic` sets the title. Both
+ship with their own licence files, and **both are personal-use only and forbid commercial
+use**. Redistribution of this repository, or of a build of it, needs a commercial licence
+from each author or a different typeface. Check `assets/fonts/*/` before publishing.
