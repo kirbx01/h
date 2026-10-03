@@ -1,0 +1,8 @@
+build/
+i_forgor
+*.o
+*.d
+*.a
+external/
+assets/bg.png
+assets/*.png
