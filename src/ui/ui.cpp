@@ -289,7 +289,6 @@ void DrawMenu(Game& g)
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Quit")) CloseWindow();
 
-    DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no music track found");
 }
 
 void DrawPause(Game& g)
@@ -487,8 +486,9 @@ bool UiIconButton(Game& g, Rectangle box, int icon)
     const bool fired = clicked || (focused && (IsKeyPressed(KEY_ENTER) ||
                                                IsKeyPressed(KEY_SPACE)));
 
-    DrawRectangleRounded(s, CORNER_R, 4, COL_PANEL);
-    DrawRectangleRoundedLinesEx(s, CORNER_R, 4, 1.0f, lit ? COL_TEXT : COL_EDGE);
+    const float rad = s.width * 0.5f;
+    DrawCircleV({s.x + rad, s.y + rad}, rad, COL_BG);
+    DrawCircleLines((int)(s.x + rad), (int)(s.y + rad), rad, lit ? COL_TEXT : COL_EDGE);
 
     const float cx = s.x + s.width * 0.5f;
     const float cy = s.y + s.height * 0.5f;
@@ -539,9 +539,9 @@ void DrawHudIcons(Game& g)
     g_buttons = 0;
     g_focusDelta = 0;
 
-    const float sz  = l.hintSize * 2.3f;
-    const float pad = l.margin * 0.40f;
-    const float y   = l.margin * 0.20f;
+    const float sz  = std::clamp(l.hintSize * 2.6f, 20.0f, 32.0f);
+    const float pad = sz * 0.4f;
+    const float y   = l.margin * 0.25f;
 
     const Rectangle settingsBox = { l.screenW - l.margin - sz, y, sz, sz };
     const Rectangle soundBox    = { settingsBox.x - sz - pad, y, sz, sz };

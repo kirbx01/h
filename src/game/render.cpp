@@ -139,8 +139,8 @@ void DrawTile(const Domino& d, float alpha)
     const Color edge = ColorAlpha(COL_TEXT, alpha);
     const Color fill = ColorAlpha(COL_TEXT, alpha * 0.06f);
 
-    DrawRectangleRounded(r, CORNER_R * 0.8f, 4, fill);
-    DrawRectangleRoundedLinesEx(r, CORNER_R * 0.8f, 4, 2.0f, edge);
+    DrawRectangleRounded(r, 4.0f, 4, fill);
+    DrawRectangleRoundedLinesEx(r, 4.0f, 4, 2.0f, edge);
 
     const bool longIsY = !d.horizontal;
     Rectangle halfA, halfB;
@@ -338,11 +338,25 @@ void DrawHints(const Game& g)
     const float fade = g.stageTime < 6.0f ? 1.0f : 0.90f;
     const Color col = ColorAlpha(COL_TEXT_FAINT, fade);
 
-    DrawSpaced(g.font, "WASD / Arrows - Move", l.margin, l.controlRowY, l.hintSize,
-               l.hintSpacing, col);
-    DrawSpaced(g.font, "R - Begin Again", l.margin, l.controlRow2Y, l.hintSize, l.hintSpacing,
-               col);
-    DrawSpaced(g.font, "Esc - Menu", l.margin, l.topRowY, l.hintSize, l.hintSpacing, col);
+    const Font& hfont = g.font;
+    const char* h1k = "esc", *h1t = " - menu";
+    const char* h2k = "r",   *h2t = " - begin again";
+    const char* h3k = "wasd / arrows", *h3t = " - move";
+    float h1kw = SpacedWidth(hfont, h1k, l.hintSize, l.hintSpacing);
+    float h2kw = SpacedWidth(hfont, h2k, l.hintSize, l.hintSpacing);
+    float h3kw = SpacedWidth(hfont, h3k, l.hintSize, l.hintSpacing);
+    float pad = l.hintSize * 0.4f;
+    const float boxh = l.hintSize * 1.2f;
+    DrawRectangleRec({l.margin, l.topRowY - boxh*0.15f, h1kw + pad*2.0f, boxh}, ColorAlpha(COL_BG, 0.0f));
+    DrawRectangleLinesEx({l.margin, l.topRowY - boxh*0.15f, h1kw + pad*2.0f, boxh}, 1.0f, col);
+    DrawSpaced(hfont, h1k, l.margin + pad, l.topRowY, l.hintSize, l.hintSpacing, col);
+    DrawSpaced(hfont, h1t, l.margin + pad*2.0f + h1kw, l.topRowY, l.hintSize, l.hintSpacing, col);
+    DrawRectangleLinesEx({l.margin, l.controlRow2Y - boxh*0.15f, h2kw + pad*2.0f, boxh}, 1.0f, col);
+    DrawSpaced(hfont, h2k, l.margin + pad, l.controlRow2Y, l.hintSize, l.hintSpacing, col);
+    DrawSpaced(hfont, h2t, l.margin + pad*2.0f + h2kw, l.controlRow2Y, l.hintSize, l.hintSpacing, col);
+    DrawRectangleLinesEx({l.margin, l.controlRowY - boxh*0.15f, h3kw + pad*2.0f, boxh}, 1.0f, col);
+    DrawSpaced(hfont, h3k, l.margin + pad, l.controlRowY, l.hintSize, l.hintSpacing, col);
+    DrawSpaced(hfont, h3t, l.margin + pad*2.0f + h3kw, l.controlRowY, l.hintSize, l.hintSpacing, col);
 }
 
 void DrawFade(const Game& g)
