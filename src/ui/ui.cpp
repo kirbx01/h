@@ -72,19 +72,23 @@ Font LoadSystem(const char* const* paths, int count, int size, bool& loaded)
 
 void Card(Rectangle r)
 {
-    DrawRectangleRounded(r, CORNER_R, 5, COL_PANEL);
-    DrawRectangleRoundedLinesEx(r, CORNER_R, 5, 1.0f, COL_EDGE);
+
 }
 
 float CardWidth(const Layout& l) { return std::clamp(l.screenW * 0.40f, 250.0f, 470.0f); }
 
 void Row(Rectangle box, const char* label, bool hover, bool focus, const Font& font)
 {
-    DrawRectangleRec(box, COL_TEXT);
-    DrawRectangleLinesEx(box, 1.0f, COL_TEXT);
     const float size = box.height * 0.34f;
+    const Color c = (hover || focus) ? COL_TEXT : COL_TEXT;
     DrawSpacedCentered(font, label, box.x + box.width * 0.5f,
-                       box.y + (box.height - size) * 0.5f, size, size * 0.16f, COL_BG);
+                       box.y + (box.height - size) * 0.5f, size, size * 0.16f, COL_TEXT);
+    if (hover || focus)
+    {
+        const float w = SpacedTextWidth(font, label, size, size * 0.16f);
+        DrawLine(box.x + box.width * 0.5f - w * 0.5f, box.y + (box.height - size) * 0.5f + size,
+                 box.x + box.width * 0.5f + w * 0.5f, box.y + (box.height - size) * 0.5f + size, COL_TEXT);
+    }
 }
 
 void DrawStatus(const Game& g, const char* text)
@@ -253,19 +257,17 @@ void DrawMenu(Game& g)
     const float gap = rowH * 0.34f;
     const int rows = g.hasSave ? 4 : 3;
 
-    const float cardH = rowH * 2.6f + rows * (rowH + gap) + l.margin * 1.2f;
-    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
-    Card(card);
+    const float menuH = rows * (rowH + gap);
+    const float cx = l.screenW * 0.5f;
+    const float startY = (l.screenH - menuH - rowH * 3.0f) * 0.5f;
+    const float titleSize = std::clamp(l.screenH * 0.12f, 42.0f, 96.0f);
+    Heading(g, GAME_TITLE, cx, startY, titleSize, titleSize * 0.10f,
+            ColorAlpha(COL_TEXT, 1.0f));
+    Label(g, "everything is temporary", cx, startY + titleSize * 1.15f,
+          std::clamp(l.screenH * 0.04f, 16.0f, 24.0f), 3.0f, COL_TEXT_FAINT);
 
-    const float cx = card.x + w * 0.5f;
-    const float titleSize = std::min(w * 0.20f, 52.0f);
-    Heading(g, GAME_TITLE, cx, card.y + l.margin * 0.75f, titleSize, titleSize * 0.10f,
-            ColorAlpha(COL_TEXT, 0.95f));
-    Label(g, "everything is temporary", cx, card.y + l.margin * 0.75f + titleSize * 1.15f,
-          std::min(w * 0.062f, 18.0f), 3.0f, COL_TEXT_FAINT);
-
-    float y = card.y + rowH * 2.6f;
-    const Rectangle row = { card.x + w * 0.12f, 0.0f, w * 0.76f, rowH };
+    float y = startY + titleSize * 2.5f;
+    const Rectangle row = { cx - w * 0.38f, 0.0f, w * 0.76f, rowH };
 
     if (g.hasSave)
     {
@@ -298,15 +300,14 @@ void DrawPause(Game& g)
     const float gap = rowH * 0.34f;
     const int rows = 4;
 
-    const float cardH = rowH * 2.4f + rows * (rowH + gap) + l.margin;
-    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
-    Card(card);
+    const float menuH = rows * (rowH + gap);
+    const float cx = l.screenW * 0.5f;
+    const float startY = (l.screenH - menuH - rowH * 1.5f) * 0.5f;
+    Heading(g, "Paused", cx, startY, std::clamp(l.screenH * 0.08f, 32.0f, 48.0f), 6.0f,
+            ColorAlpha(COL_TEXT, 1.0f));
 
-    Heading(g, "Paused", card.x + w * 0.5f, card.y + l.margin, std::min(w * 0.16f, 38.0f), 6.0f,
-            ColorAlpha(COL_TEXT, 0.95f));
-
-    float y = card.y + rowH * 2.4f;
-    const Rectangle row = { card.x + w * 0.12f, 0.0f, w * 0.76f, rowH };
+    float y = startY + rowH * 1.8f;
+    const Rectangle row = { cx - w * 0.38f, 0.0f, w * 0.76f, rowH };
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Resume"))
     { GoToScreen(g, SCREEN_PLAYING); return; }
@@ -331,20 +332,20 @@ void DrawPause(Game& g)
 void DrawSettings(Game& g)
 {
     const Layout& l = CurrentLayout();
-    const float w = CardWidth(l) * 1.15f;
-    const float rowH = w * 0.125f;
+    const float w = std::clamp(l.screenW * 0.5f, 360.0f, 640.0f);
+    const float rowH = std::clamp(l.screenH * 0.08f, 40.0f, 64.0f);
 
-    const float cardH = rowH * 7.6f + l.margin * 1.4f;
-    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
-    Card(card);
+    const float cx = l.screenW * 0.5f;
+    const float totalH = rowH * 6.5f;
+    const float startY = (l.screenH - totalH - rowH * 2.0f) * 0.5f;
 
-    Heading(g, "Settings", card.x + w * 0.5f, card.y + l.margin * 0.8f,
-            std::min(w * 0.13f, 34.0f), 6.0f, ColorAlpha(COL_TEXT, 0.95f));
+    Heading(g, "Settings", cx, startY,
+            std::clamp(l.screenH * 0.09f, 36.0f, 64.0f), 6.0f, ColorAlpha(COL_TEXT, 1.0f));
 
     GuiSetFont(g.font);
-    const float x = card.x + w * 0.12f;
-    const float cw = w * 0.76f;
-    float y = card.y + rowH * 2.1f;
+    const float x = cx - w * 0.5f;
+    const float cw = w;
+    float y = startY + rowH * 2.0f;
 
     if (GuiSliderBar({ x, y, cw, 22.0f }, "Volume", "0 - 100", &g.settings.volume, 0.0f, 1.0f))
         sound::Pop();
@@ -360,7 +361,7 @@ void DrawSettings(Game& g)
     y += rowH * 2.4f;
 
     const float bw = w * 0.44f;
-    if (UiButton(g, { card.x + (w - bw) * 0.5f, y, bw, rowH }, "Back"))
+    if (UiButton(g, { cx - bw * 0.5f, y, bw, rowH }, "Back"))
         GoToScreen(g, g.returnScreen);
 
     DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no audio track loaded");
