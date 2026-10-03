@@ -7,8 +7,8 @@ namespace witness {
 
 namespace {
 
-constexpr float TILE_SHORT = 36.0f;
-constexpr float TILE_LONG  = 80.0f;
+constexpr float TILE_SHORT = 44.0f;
+constexpr float TILE_LONG  = 96.0f;
 
 constexpr struct
 {
