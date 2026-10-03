@@ -40,9 +40,10 @@ install -m 755 "$BUILD_DIR/bin/$NAME" "$DIST_DIR/$NAME"
 if [ -d assets ]; then
     mkdir -p "$DIST_DIR/assets"
     for f in assets/*.ogg assets/*.wav assets/*.mp3 assets/*.qoa assets/*.xm assets/*.mod \
-             assets/itch_url.txt; do
+             assets/bg.png assets/itch_url.txt; do
         [ -e "$f" ] && install -m 644 "$f" "$DIST_DIR/assets/"
     done
+    [ ! -d assets/fonts ] || cp -R assets/fonts "$DIST_DIR/assets/"
     rmdir "$DIST_DIR/assets" 2>/dev/null || true
 fi
 

@@ -29,6 +29,11 @@ STAGE_DIR="${STAGE_DIR:-$BUILD_DIR/web-assets}"
 rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 
+cp assets/bg.png "$STAGE_DIR/" 2>/dev/null || true
+if [ -d assets/fonts ]; then
+    cp -R assets/fonts "$STAGE_DIR/"
+fi
+
 shopt -s nullglob
 compressed=(assets/*.ogg assets/*.mp3 assets/*.qoa assets/*.xm assets/*.mod)
 raw=(assets/*.wav assets/*.flac)

@@ -32,14 +32,14 @@ mkdir -p "$DIST_DIR"
 
 install -m 755 "$BUILD_DIR/bin/$NAME" "$DIST_DIR/$NAME"
 
-# The game looks for its music in assets/ next to the executable, so the folder has to
-# carry it. Only what is actually present is copied.
+# Keep runtime assets, fonts, and their bundled license files beside the executable.
 if [ -d assets ]; then
     mkdir -p "$DIST_DIR/assets"
     for f in assets/*.ogg assets/*.wav assets/*.mp3 assets/*.qoa assets/*.xm assets/*.mod \
-             assets/itch_url.txt; do
+             assets/bg.png assets/itch_url.txt; do
         [ -e "$f" ] && install -m 644 "$f" "$DIST_DIR/assets/"
     done
+    [ ! -d assets/fonts ] || cp -R assets/fonts "$DIST_DIR/assets/"
     rmdir "$DIST_DIR/assets" 2>/dev/null || true
 fi
 

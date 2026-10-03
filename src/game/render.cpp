@@ -15,6 +15,7 @@ Layout g_layout;
 // Keycap padding, in multiples of the hint font size.
 constexpr float KEYCAP_PAD_X = 0.42f;
 constexpr float KEYCAP_PAD_Y = 0.28f;
+constexpr Color HUD_VIOLET = { 0x55, 0x40, 0x78, 255 };
 
 float Smooth(float t)
 {
@@ -170,23 +171,18 @@ void DrawDoorShape(const Game& g, float alpha)
     if (alpha <= 0.001f) return;
 
     const Rectangle door = { DOOR_X, DOOR_Y, DOOR_W, DOOR_H };
-    const bool open = g.board.sealOpen;
-    const float pulse = 0.5f + 0.5f * std::sin(g.board.doorPulse * 1.6f);
-    const int grey = open ? (int)(60 - 55 * pulse) : 193;
+    const Rectangle inner = { door.x + 7.0f, door.y + 7.0f,
+                              door.width - 14.0f, door.height - 14.0f };
+    const float progress = std::clamp((float)g.board.emptied /
+                                      (float)std::max(1, g.board.sealNeed), 0.0f, 1.0f);
+    const float fillHeight = inner.height * progress;
+    if (fillHeight > 0.0f)
+        DrawRectangleRec({ inner.x, inner.y + inner.height - fillHeight,
+                           inner.width, fillHeight }, ColorAlpha(HUD_VIOLET, alpha));
 
-    const Color face = ColorAlpha({ (unsigned char)grey, (unsigned char)grey,
-                                    (unsigned char)grey, 255 },
-                                  alpha * (open ? 0.30f : 0.45f));
-    DrawRectangleRounded(door, CORNER_R, 4, face);
-    DrawRectangleRoundedLinesEx(door, CORNER_R, 4, 1.0f, ColorAlpha(face, 1.0f));
-
-    if (!open)
-        for (int i = 0; i < g.board.sealNeed; i++)
-        {
-            const float x = door.x + door.width * 0.5f - g.board.sealNeed * 4.5f + i * 9.0f;
-            DrawRectangleLinesEx({ x, door.y + door.height - 13.0f, 6.0f, 6.0f }, 1.0f,
-                                 ColorAlpha(i < g.board.emptied ? COL_TEXT : COL_EDGE, alpha));
-        }
+    const Color outline = ColorAlpha(COL_TEXT, alpha);
+    DrawRectangleLinesEx(door, 1.0f, outline);
+    DrawRectangleLinesEx(inner, 1.0f, outline);
 }
 
 
@@ -407,7 +403,7 @@ void DrawHints(const Game& g)
 {
     const Layout& l = CurrentLayout();
     const float fade = g.stageTime < 6.0f ? 1.0f : 0.90f;
-    const Color col = ColorAlpha(COL_TEXT_FAINT, fade);
+    const Color col = ColorAlpha(HUD_VIOLET, fade);
 
     const Font& f = g.font;
     const float size = l.hintSize;
@@ -540,6 +536,18 @@ void DrawFrame(Game& g)
             DrawStoryLine(g);
             DrawHints(g);
             DrawHudControls(g);
+
+            const float boxW = 74.0f;
+            const float boxH = 34.0f;
+            const float boxX = (g_layout.screenW - boxW) * 0.5f;
+                const float boxY = g_layout.topRowY;
+            const Rectangle pipBox = { boxX, boxY, boxW, boxH };
+            DrawRectangleRec(pipBox, COL_BG);
+            DrawRectangleLinesEx(pipBox, 1.0f, HUD_VIOLET);
+            DrawHalfPips({ boxX + 3.0f, boxY + 3.0f, 28.0f, 28.0f }, g.ball.pipValue, HUD_VIOLET);
+
+            char pipValue[2] = { (char)('0' + std::clamp(g.ball.pipValue, 0, 6)), '\0' };
+            DrawSpaced(g.font, pipValue, boxX + 44.0f, boxY + 9.0f, 16.0f, 0.0f, HUD_VIOLET);
         }
 
         if (g.screen == SCREEN_MENU || g.screen == SCREEN_PAUSE ||

@@ -408,7 +408,7 @@ void DrawCredits(Game& g)
     Label(g, "WASD / Arrows - Move     R - Begin Again     Esc - Menu", cx, y, size * 0.88f, 2.0f,
           ColorAlpha(COL_TEXT_FAINT, t));
     y += gap;
-    Label(g, "built with raylib and raygui (zlib)", cx, y, size * 0.88f, 2.0f,
+    Label(g, "written, directed & sfx by kirbx01 (pyanc) · made with raylib", cx, y, size * 0.88f, 2.0f,
           ColorAlpha(COL_TEXT_FAINT, t));
     y += gap;
 
