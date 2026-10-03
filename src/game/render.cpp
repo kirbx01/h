@@ -176,7 +176,7 @@ void DrawTile(const Domino& d, float alpha)
 
         p.x = std::clamp(p.x, r.x + 5.0f, r.x + r.width - 5.0f);
         p.y = std::clamp(p.y, r.y + 5.0f, r.y + r.height - 5.0f);
-        DrawCircleV(p, 3.0f, ColorAlpha(d.keystone ? COL_TEXT : COL_TEXT_DIM, alpha));
+        DrawCircleV(p, 3.6f, ColorAlpha(d.keystone ? COL_TEXT : COL_TEXT_DIM, alpha));
         drawn++;
     }
 }
