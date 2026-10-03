@@ -1,4 +1,4 @@
-TARGET  ?= after_the_fall
+TARGET  ?= i_forgor
 SRC_DIR := src
 BUILD   := build
 BUILD_TEST ?= build-test
@@ -7,10 +7,10 @@ RAYLIB_DIR ?= external/raylib
 RAYGUI_DIR ?= external/raygui
 RAYGUI_CLASSIC_STYLE ?= 0
 
-# Credits metadata. ATF_ITCH_URL is intentionally empty by default: the game refuses to
+# Credits metadata. IFG_ITCH_URL is intentionally empty by default: the game refuses to
 # invent a URL, and assets/itch_url.txt can point the credits at the real page instead.
-ATF_AUTHOR   ?= kirbx01
-ATF_ITCH_URL ?=
+IFG_AUTHOR   ?= kirbx01
+IFG_ITCH_URL ?=
 
 UNAME := $(shell uname -s)
 
@@ -43,7 +43,7 @@ INCLUDES := $(RAYLIB_CFLAGS) \
             -I$(SRC_DIR)/platform \
             -I$(RAYGUI_DIR)/src
 
-DEFINES := -DATF_AUTHOR='"$(ATF_AUTHOR)"' -DATF_ITCH_URL='"$(ATF_ITCH_URL)"'
+DEFINES := -DSUPPORT_MODULE_RAAC -DIFG_AUTHOR='"$(IFG_AUTHOR)"' -DIFG_ITCH_URL='"$(IFG_ITCH_URL)"'
 
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra $(RAYGUI_FLAG) $(DEFINES) $(INCLUDES) -MMD -MP
 LDFLAGS  := $(RAYLIB_LIBS)
@@ -76,8 +76,8 @@ TEST_TARGET  := $(BUILD_TEST)/smoke_test
 BUILD_CAPTURE ?= build-capture
 CAPTURE_TARGET := $(BUILD_CAPTURE)/capture
 
-# Set SAVE_DIR=/tmp/atf to keep the session file out of your real profile while testing:
-#   SAVE_DIR=/tmp/atf make run
+# Set SAVE_DIR=/tmp/ifg to keep the session file out of your real profile while testing:
+#   SAVE_DIR=/tmp/ifg make run
 
 .PHONY: all run clean deps raylib test capture
 
@@ -147,4 +147,4 @@ deps:
 clean:
 	rm -rf $(BUILD) $(BUILD_TEST) $(BUILD_CAPTURE) $(TARGET)
 
--include $(DEPS)
+-include $(DEPS) $(TEST_OBJECTS:.o=.d) $(CAPTURE_OBJECTS:.o=.d)
