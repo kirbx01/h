@@ -69,8 +69,6 @@ void Step(Game& g, int frames)
     for (int i = 0; i < frames; i++) UpdateGame(g, STEP);
 }
 
-// Dash straight at a tile from whichever side has room for a run-up. The board now starts
-// near the left edge, so a fixed 200px approach would spawn the ball outside the world.
 void DashAt(Game& g, int tileIndex)
 {
     const Rectangle r = TileRect(g.board.tiles[tileIndex]);
@@ -118,15 +116,11 @@ void CheckLayout(const WindowSize& win)
           l.viewX + l.viewW <= l.screenW + 0.5f &&
           l.viewY + l.viewH <= l.screenH + 0.5f, label);
 
-    // The HUD is drawn in screen pixels against the window edges while the board lives in
-    // design units, so the playfield rectangle has to land between the two HUD bands.
     const float playT = l.viewY + PLAY_Y * l.scale;
     const float playB = l.viewY + (PLAY_Y + PLAY_H) * l.scale;
     const float playL = l.viewX + PLAY_X * l.scale;
     const float playR = l.viewX + (PLAY_X + PLAY_W) * l.scale;
 
-    // The keycap rows are taller than the glyphs: MeasureTextEx reports the font size as the
-    // line height, and the caps pad it on both sides.
     const float capPad = l.hintSize * 0.28f;
     const float capTop = l.controlRow2Y - capPad;
 

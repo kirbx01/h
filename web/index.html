@@ -30,7 +30,6 @@
     display: block;
   }
 
-  /* Shown until the module has loaded. Replaced by the canvas once it is up. */
   #boot {
     position: absolute;
     inset: 0;
@@ -98,7 +97,6 @@
         document.getElementById('boot').classList.add('gone');
         return;
       }
-      // The default status line duplicates the title above it, so it is dropped.
       document.getElementById('boot').firstElementChild.firstElementChild.textContent = text;
     },
     monitorRunDependencies: function (left) {
@@ -114,7 +112,6 @@
     },
     canvas: (function () {
       var c = document.createElement('canvas');
-      // The game is fixed at 1280x720; anything else is scaled by the CSS above.
       c.width = 1280;
       c.height = 720;
       return c;

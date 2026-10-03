@@ -77,9 +77,6 @@ constexpr float DOOR_Y =  96.0f;
 constexpr float DOOR_W =  70.0f;
 constexpr float DOOR_H = 128.0f;
 
-// The HUD is drawn in screen pixels against the window edges, so the design surface reserves
-// these margins and the playfield stays inside them. On windows too small to give both the
-// layout gives up scale instead of letting them collide.
 constexpr float PLAY_X =  70.0f;
 constexpr float PLAY_Y =  80.0f;
 constexpr float PLAY_W = 1140.0f;
@@ -123,8 +120,6 @@ enum Screen
 
 constexpr int MAX_TILES = 16;
 
-// A domino is a real rounded rectangle, twice as long as it is wide. DOMINO_CORNER is measured
-// in screen pixels and divided by the layout scale so the outline never thickens when zoomed.
 constexpr float TILE_LONG     = 100.0f;
 constexpr float TILE_SHORT    =  48.0f;
 constexpr float DOMINO_CORNER =  3.0f;

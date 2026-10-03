@@ -194,10 +194,6 @@ Layout ComputeLayoutFor(float screenW, float screenH)
     l.controlRow2Y = l.screenH - l.margin - l.hintSize * 3.0f;
     l.controlRowY  = l.screenH - l.margin - l.hintSize * 1.1f;
 
-    // Screen-space bands the HUD occupies. The world view is a centred letterbox fit of the
-    // design surface, which is 1:1 at the design size; if the window is too small for the
-    // bands as well, the view shrinks and anchors the playfield between them instead of
-    // letting the HUD sit on top of the board.
     const float bandTop = l.topRowY + l.hintSize + l.margin * 0.35f;
     const float bandBot = l.screenH - l.margin - l.hintSize * 3.4f;
 

@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-#
-# Windows build, cross compiled from Linux with MinGW-w64. Produces a folder holding
-# i_forgor.exe and its assets, ready to be zipped and handed to someone.
-#
-#   PATH=/path/to/mingw64/bin:$PATH scripts/build_windows.sh
-#
-# Any MinGW-w64 g++ works: a distro package, a winlibs unpack, or the archive from
-# niXman/mingw-builds-binaries (the Linux hosted one, since this script runs on Linux).
 
 set -euo pipefail
 
@@ -55,14 +47,11 @@ rem Keeps the console window from appearing behind the game.
 start "" "%~dp0i_forgor.exe"
 BAT
 
-# Sanity check that the file really is a PE binary before it is called done.
 file "$DIST_DIR/$NAME" | grep -q "PE32" || {
     echo "the built file is not a PE executable" >&2
     exit 1
 }
 
-# The folder is what gets zipped; the contents go in so that i_forgor.exe sits at the root
-# of the archive, which is where itch.io looks for the launch path.
 ( cd "$DIST_DIR" && zip -q -r -9 "../$(basename "$DIST_DIR").zip" . )
 
 echo

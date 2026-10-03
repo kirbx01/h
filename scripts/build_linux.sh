@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-#
-# Linux build. Produces a single folder and a tarball in dist/ that runs on any x86-64
-# machine with a GL 3.3 driver and the usual desktop libraries.
-#
-#   scripts/build_linux.sh
-#
-# Static libgcc/libstdc++ are linked so the folder does not depend on the gcc runtime
-# being installed; everything else (X11, GL) is expected from the host.
 
 set -euo pipefail
 
@@ -32,7 +24,6 @@ mkdir -p "$DIST_DIR"
 
 install -m 755 "$BUILD_DIR/bin/$NAME" "$DIST_DIR/$NAME"
 
-# Keep runtime assets, fonts, and their bundled license files beside the executable.
 if [ -d assets ]; then
     mkdir -p "$DIST_DIR/assets"
     for f in assets/*.ogg assets/*.wav assets/*.mp3 assets/*.qoa assets/*.xm assets/*.mod \
@@ -47,9 +38,6 @@ cp README.md "$DIST_DIR/" 2>/dev/null || true
 
 tar -czf "${DIST_DIR}.tar.gz" -C "$(dirname "$DIST_DIR")" "$(basename "$DIST_DIR")"
 
-# itch.io takes a zip just as happily as a tarball, and a zip is the one archive every
-# platform target shares, so one is written next to it. The folder's contents go in, not
-# the folder, so the executable lands at the root of the archive where itch expects it.
 ( cd "$DIST_DIR" && zip -q -r -9 "../$(basename "$DIST_DIR").zip" . )
 
 echo

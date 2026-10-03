@@ -37,8 +37,6 @@ constexpr Color HOVER_TEXT   = { 0x88, 0x08, 0x08, 255 };
 int g_buttons = 0;
 int g_focusDelta = 0;
 
-// Keyboard focus is only advertised once the player has actually navigated, so a fresh frame
-// does not come up with the first control underlined.
 bool g_focusArmed = false;
 
 Font LoadFirst(const char* const* paths, int count, int size, const char* const* system,
@@ -474,8 +472,6 @@ void UnloadBackground(Game& g)
     g.bgLoaded = false;
 }
 
-// A HUD control is just its label: the hitbox is the measured text bounds, so there is no
-// button chrome to misread and no circular badge sitting over the playfield.
 bool UiTextControl(Game& g, Rectangle box, const char* label, float size, float spacing,
                   Color idleColor)
 {

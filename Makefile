@@ -7,8 +7,6 @@ RAYLIB_DIR ?= external/raylib
 RAYGUI_DIR ?= external/raygui
 RAYGUI_CLASSIC_STYLE ?= 0
 
-# Credits metadata. IFG_ITCH_URL is intentionally empty by default: the game refuses to
-# invent a URL, and assets/itch_url.txt can point the credits at the real page instead.
 IFG_AUTHOR   ?= kirbx01
 IFG_ITCH_URL ?=
 
@@ -59,8 +57,6 @@ SOURCES := $(wildcard $(SRC_DIR)/*.cpp) \
 OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD)/%.o,$(SOURCES))
 DEPS    := $(OBJECTS:.o=.d)
 
-# The smoke test links only the simulation translation units and stubs input, audio and
-# drawing, so the whole progression can be verified without a display or a sound card.
 TEST_SOURCES := $(SRC_DIR)/game/board.cpp \
                 $(SRC_DIR)/game/trail.cpp \
                 $(SRC_DIR)/game/story.cpp \
@@ -70,9 +66,6 @@ TEST_SOURCES := $(SRC_DIR)/game/board.cpp \
 TEST_OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_TEST)/%.o,$(TEST_SOURCES)) \
                 $(patsubst tests/%.cpp,$(BUILD_TEST)/tests/%.o,$(wildcard tests/*.cpp))
 TEST_TARGET  := $(BUILD_TEST)/smoke_test
-
-# Set SAVE_DIR=/tmp/ifg to keep the session file out of your real profile while testing:
-#   SAVE_DIR=/tmp/ifg make run
 
 .PHONY: all run clean deps raylib test
 
@@ -103,8 +96,6 @@ raylib:
 run: $(TARGET)
 	./$(TARGET)
 
-# Headless verification of movement, erosion, traces, progression and persistence.
-# SAVE_DIR keeps the session file out of your real profile.
 test: $(TEST_TARGET)
 	@SAVE_DIR=$(CURDIR)/$(BUILD_TEST) ./$(TEST_TARGET)
 

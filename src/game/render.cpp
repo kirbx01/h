@@ -12,7 +12,6 @@ namespace {
 
 Layout g_layout;
 
-// Keycap padding, in multiples of the hint font size.
 constexpr float KEYCAP_PAD_X = 0.42f;
 constexpr float KEYCAP_PAD_Y = 0.28f;
 constexpr Color HUD_VIOLET = { 0x55, 0x40, 0x78, 255 };
@@ -89,8 +88,6 @@ void Centered(const Font& font, const char* text, float cx, float y, float size,
                color);
 }
 
-// A domino half is laid out on the usual 3x3 pip grid; PIP_CELL indexes that grid as
-// column + 3 * row, so the same table serves both tile orientations.
 constexpr float PIP_GX[3] = { 0.28f, 0.50f, 0.72f };
 constexpr float PIP_GY[3] = { 0.27f, 0.50f, 0.73f };
 
@@ -137,8 +134,6 @@ void DrawTile(const Domino& d, float alpha)
         return;
     }
 
-    // DOMINO_CORNER is a screen pixel count, so undo the world scale before handing it to
-    // raylib. Without this the outline thickens on every zoomed window.
     const float s = std::max(0.05f, CurrentLayout().scale);
     const float corner = std::min({ DOMINO_CORNER / s, r.width * 0.5f, r.height * 0.5f });
     const float bar    = std::max(1.0f / s, 1.0f);
@@ -205,10 +200,6 @@ float BlobLobe(float a, float phase)
                 + 0.022f * std::sin(5.0f * a + 1.7f);
 }
 
-// raylib turns on GL_CULL_FACE globally, so only front facing triangles survive. The centre
-// vertex therefore comes first and the arc runs backwards through the angles, which is the
-// same winding rlgl's own circle sector uses. Emitting the fan the other way round (or as
-// raw RL_TRIANGLES) culls every wedge and the player disappears completely.
 void BlobFan(float rx, float ry, float phase, Color fill)
 {
     rlSetTexture(0);
@@ -249,7 +240,6 @@ void DrawBallShape(const Game& g, float alpha)
     const float angle = speed > 12.0f ? std::atan2(b.vel.y, b.vel.x) : b.impactAngle;
     const float phase = 0.9f + (0.5f + 0.5f * std::sin(g.clock * 1.7f)) * 0.6f;
 
-    // The outline is a screen pixel count too, so it stays crisp instead of growing with zoom.
     const float ring = std::max(1.0f, 2.0f / std::max(0.05f, CurrentLayout().scale));
 
     rlPushMatrix();
@@ -377,8 +367,6 @@ void DrawStoryLine(const Game& g)
                        l.storySpacing, ColorAlpha(COL_TEXT_DIM, a));
 }
 
-// A keycap is the key label inside a square-cornered box; the label sits beside it. Widths are
-// measured from the same helper the draw uses so the drawn box always matches the text.
 float HintGroupWidth(const Font& font, const char* key, const char* label, float size, float spacing)
 {
     const float capW = SpacedWidth(font, key, size, spacing) + size * KEYCAP_PAD_X * 2.0f;
@@ -436,8 +424,6 @@ void DrawFade(const Game& g)
                   ColorAlpha(COL_BG_DEEP, g.transition.t));
 }
 
-// Intro, clear and ending text is drawn inside the world view, so it works in design units.
-// Mixing screen pixels in here would get the world transform applied twice.
 constexpr float DESIGN_EDGE = 34.0f;
 constexpr float DESIGN_MID_X = (float)DESIGN_W * 0.5f;
 constexpr float DESIGN_MID_Y = (float)DESIGN_H * 0.5f;

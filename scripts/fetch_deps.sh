@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Pulls the engine and its UI kit into external/.
-#
-# external/ is not tracked, so a fresh clone has nothing to build against. This fetches
-# the two pinned versions the game is written for. Existing checkouts are left alone.
 
 set -euo pipefail
 
@@ -15,7 +10,6 @@ RAYGUI_VERSION="${RAYGUI_VERSION:-5.1}"
 mkdir -p external
 
 fetch() {
-    # $1 = url, $2 = destination directory, $3 = expected marker file
     local url="$1" dest="$2" marker="$3"
 
     if [ -e "$marker" ]; then
