@@ -31,34 +31,95 @@ namespace witness {
 namespace {
 
 constexpr float LINK_SPACING = 3.0f;
+constexpr float HOVER_GROW   = 1.16f;
 
-Rectangle CenterBox(int w, int h, int y)
+int g_buttons = 0;
+int g_focusDelta = 0;
+
+Font LoadFirst(const char* const* paths, int count, int size, const char* const* system,
+               int systemCount, bool& loaded)
 {
-    return Rectangle{ (SCREEN_W - w) * 0.5f, (float)y, (float)w, (float)h };
+    loaded = false;
+    for (int i = 0; i < count + systemCount; i++)
+    {
+        const char* path = (i < count) ? paths[i] : system[i - count];
+        if (!FileExists(path)) continue;
+
+        Font f = LoadFontEx(path, size, nullptr, 0);
+        if (f.texture.id == 0 || f.glyphCount == 0 || f.baseSize == 0) continue;
+
+        SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
+        loaded = true;
+        return f;
+    }
+    return GetFontDefault();
 }
 
-// Small faint note used for honest status: a missing track, an unconfigured link.
+Font LoadSystem(const char* const* paths, int count, int size, bool& loaded)
+{
+    static const char* system[] =
+    {
+        "C:/Windows/Fonts/arial.ttf",
+        "/Library/Fonts/Arial.ttf",
+        "/System/Library/Fonts/Supplemental/Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf"
+    };
+    return LoadFirst(paths, count, size, system, (int)(sizeof(system) / sizeof(system[0])),
+                     loaded);
+}
+
+void Card(Rectangle r)
+{
+    DrawRectangleRounded(r, CORNER_R, 5, COL_PANEL);
+    DrawRectangleRoundedLinesEx(r, CORNER_R, 5, 1.0f, COL_EDGE);
+}
+
+float CardWidth(const Layout& l) { return std::clamp(l.screenW * 0.40f, 250.0f, 470.0f); }
+
+void Row(Rectangle box, const char* label, bool hover, bool focus, const Font& font)
+{
+    if (focus)
+    {
+        DrawRectangleRec(box, ColorAlpha(COL_BG_DEEP, 140));
+        DrawRectangleLinesEx(box, 1.0f, COL_TEXT_DIM);
+    }
+    else if (hover)
+    {
+        DrawRectangleLinesEx(box, 1.0f, COL_EDGE);
+    }
+
+    const float size = box.height * 0.34f;
+    DrawSpacedCentered(font, label, box.x + box.width * 0.5f,
+                       box.y + (box.height - size) * 0.5f, size, size * 0.16f,
+                       hover ? COL_TEXT : COL_TEXT_DIM);
+}
+
 void DrawStatus(const Game& g, const char* text)
 {
     if (!text || !*text) return;
-    DrawSpacedCentered(g.font, text, SCREEN_W * 0.5f, (float)SCREEN_H - 52.0f, 14.0f, 2.0f,
-                       ColorAlpha(COL_TEXT_FAINT, 0.85f));
+    const Layout& l = CurrentLayout();
+    DrawSpacedCentered(g.font, text, l.screenW * 0.5f, l.screenH - l.margin * 0.55f,
+                       l.hintSize, l.hintSpacing, ColorAlpha(COL_TEXT_FAINT, 1.0f));
 }
 
-void DrawTitle(const Game& g, const char* text, int y, int size, float spacing, Color color)
+void Heading(const Game& g, const char* text, float cx, float y, float size, float spacing,
+             Color color)
 {
-    DrawSpacedCentered(g.font, text, SCREEN_W * 0.5f, (float)y, (float)size, spacing, color);
+    DrawSpacedCentered(g.titleFont, text, cx, y, size, spacing, color);
 }
 
-} // namespace
+void Label(const Game& g, const char* text, float cx, float y, float size, float spacing,
+           Color color)
+{
+    DrawSpacedCentered(g.font, text, cx, y, size, spacing, color);
+}
 
-//------------------------------------------------------------------------------------
-// Resolves the itch.io address once at startup: a plain text file wins so a build can
-// be re-pointed without a recompile, otherwise the value baked in at build time is
-// used. Nothing is invented when neither is present.
+}
+
 std::string ResolveItchUrl()
 {
-
     if (FileExists(ITCH_URL_FILE))
     {
         FILE* f = fopen(ITCH_URL_FILE, "rb");
@@ -75,107 +136,82 @@ std::string ResolveItchUrl()
             if (!url.empty()) return url;
         }
     }
-
-    return std::string(ATF_ITCH_URL);
+    return std::string(IFG_ITCH_URL);
 }
 
-
-//------------------------------------------------------------------------------------
-// Font and background plumbing carried over from the original shell
-//------------------------------------------------------------------------------------
-Font LoadUiFont(bool& loaded, int& size)
+void LoadFonts(Game& g)
 {
-    static const char* candidates[] = {
-        "assets/arial.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/ARIAL.TTF",
-        "/Library/Fonts/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/liberation2/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
-    };
-
-    loaded = false;
-    size = UI_FONT_SIZE;
-
-    for (const char* path : candidates)
-    {
-        if (!FileExists(path)) continue;
-
-        Font f = LoadFontEx(path, size, nullptr, 0);
-        if (f.texture.id == 0 || f.glyphCount == 0 || f.baseSize == 0) continue;
-
-        SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
-        loaded = true;
-        return f;
-    }
-
-    return GetFontDefault();
+    g.titleFont = LoadSystem(FONT_TITLE_PATHS, (int)(sizeof(FONT_TITLE_PATHS) /
+                                sizeof(FONT_TITLE_PATHS[0])), TITLE_FONT_SIZE,
+                             g.titleFontLoaded);
+    g.font = LoadSystem(FONT_BODY_PATHS, (int)(sizeof(FONT_BODY_PATHS) /
+                        sizeof(FONT_BODY_PATHS[0])), UI_FONT_SIZE, g.fontLoaded);
 }
 
-void StyleUi(Font font)
+void UnloadFonts(Game& g)
 {
-    // Raygui loads its default style the first time a control is drawn, which would
-    // overwrite anything set before that point. Loading it here makes the overrides below
-    // the last word.
+    if (g.fontLoaded) UnloadFont(g.font);
+    if (g.titleFontLoaded) UnloadFont(g.titleFont);
+    g.fontLoaded = g.titleFontLoaded = false;
+}
+
+void StyleUi()
+{
     GuiLoadStyleDefault();
+    GuiSetFont(GetFontDefault());
 
-    GuiSetFont(font);
-
-    // Greyscale only. There is no colour in this game, including in its panels.
-    GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL,    ColorToInt({ 14, 14, 14, 235 }));
-    GuiSetStyle(DEFAULT, BASE_COLOR_FOCUSED,   ColorToInt({  0,  0,  0, 255 }));
-    GuiSetStyle(DEFAULT, BASE_COLOR_PRESSED,   ColorToInt({ 44, 44, 44, 255 }));
-    GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL,  ColorToInt({ 70, 70, 70, 255 }));
-    GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, ColorToInt({ 236, 236, 236, 255 }));
-    GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, ColorToInt({ 236, 236, 236, 255 }));
-    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL,    ColorToInt(COL_TEXT));
+    GuiSetStyle(DEFAULT, BASE_COLOR_NORMAL,    ColorToInt(COL_PANEL));
+    GuiSetStyle(DEFAULT, BASE_COLOR_FOCUSED,   ColorToInt(COL_BG_DEEP));
+    GuiSetStyle(DEFAULT, BASE_COLOR_PRESSED,   ColorToInt({ 252, 252, 252, 255 }));
+    GuiSetStyle(DEFAULT, BORDER_COLOR_NORMAL,  ColorToInt(COL_EDGE));
+    GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, ColorToInt(COL_TEXT));
+    GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, ColorToInt(COL_TEXT));
+    GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL,    ColorToInt(COL_TEXT_DIM));
     GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED,   ColorToInt(COL_TEXT));
     GuiSetStyle(DEFAULT, TEXT_COLOR_DISABLED,  ColorToInt(COL_TEXT_GHOST));
-    GuiSetStyle(BUTTON,  BORDER_WIDTH,         1);
-    GuiSetStyle(BUTTON,  TEXT_ALIGNMENT,       TEXT_ALIGN_CENTER);
-    GuiSetStyle(LABEL,   TEXT_ALIGNMENT,       TEXT_ALIGN_LEFT);
-    GuiSetStyle(SLIDER,  SLIDER_WIDTH,         12);
+    GuiSetStyle(BUTTON, BORDER_WIDTH, 1);
+    GuiSetStyle(SLIDER, SLIDER_WIDTH, 12);
 }
 
-bool LoadBackground(Game& g)
+bool UiButton(Game& g, Rectangle box, const char* label)
 {
-    if (!FileExists(BG_IMAGE)) return false;
+    const int slot = g_buttons++;
 
-    g.bg = LoadTexture(BG_IMAGE);
-    if (g.bg.id == 0) return false;
+    const bool mouseHover = CheckCollisionPointRec(GetMousePosition(), box);
+    if (mouseHover) g.focus = slot;
 
-    SetTextureFilter(g.bg, TEXTURE_FILTER_BILINEAR);
-    return true;
-}
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_TAB)) g_focusDelta++;
+    if (IsKeyPressed(KEY_UP)) g_focusDelta--;
 
-void UnloadBackground(Game& g)
-{
-    if (g.bg.id != 0) UnloadTexture(g.bg);
-    g.bg = {};
-    g.bgLoaded = false;
-}
+    const bool focused = (g.focus == slot);
+    const bool lit = mouseHover || focused;
+    const float grow = lit ? HOVER_GROW : 1.0f;
 
-void DrawBackground(const Game& g)
-{
-    if (g.settings.showBg && g.bgLoaded && g.bg.id != 0)
+    const Rectangle scaled =
     {
-        const float scale = std::max((float)SCREEN_W / (float)g.bg.width,
-                                     (float)SCREEN_H / (float)g.bg.height);
-        const int w = (int)((float)g.bg.width * scale);
-        const int h = (int)((float)g.bg.height * scale);
-        DrawTexture(g.bg, (SCREEN_W - w) / 2, (SCREEN_H - h) / 2, WHITE);
-        DrawRectangle(0, 0, SCREEN_W, SCREEN_H, COL_SCRIM);
+        box.x + box.width * (1.0f - grow) * 0.5f,
+        box.y + box.height * (1.0f - grow) * 0.5f,
+        box.width * grow,
+        box.height * grow
+    };
+
+    const bool clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                         CheckCollisionPointRec(GetMousePosition(), scaled);
+    const bool fired = clicked || (focused && (IsKeyPressed(KEY_ENTER) ||
+                                               IsKeyPressed(KEY_SPACE) ||
+                                               IsKeyPressed(KEY_KP_ENTER)));
+
+    Row(scaled, label, mouseHover, focused, g.font);
+
+    if (fired)
+    {
+        sound::Pop();
+        g.focus = slot;
     }
+
+    return fired;
 }
 
-//------------------------------------------------------------------------------------
-// Clickable link
-//------------------------------------------------------------------------------------
 bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, bool underlined)
 {
     const float w = SpacedTextWidth(g.font, text, size, LINK_SPACING);
@@ -183,32 +219,20 @@ bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, 
 
     const Rectangle bounds = { x, y, w, h };
     const bool hover = CheckCollisionPointRec(GetMousePosition(), bounds);
-
-    // Keyboard focus: the same link can be reached and fired without a mouse.
-    if (IsKeyPressed(KEY_TAB) ||
-        IsKeyPressed(KEY_DOWN) ||
-        IsKeyPressed(KEY_UP))
-    {
-        g.linkFocus = !g.linkFocus;
-    }
-
-    const bool active = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
-                        IsKeyPressed(KEY_KP_ENTER);
+    if (hover) g.linkFocus = true;
 
     const bool urlSet = g.itchUrl.compare(0, 8, "https://") == 0 ||
                         g.itchUrl.compare(0, 7, "http://") == 0;
 
     const bool lit = (hover || g.linkFocus) && urlSet;
-    const Color color = lit ? COL_TEXT : ColorAlpha(COL_TEXT_DIM, urlSet ? 1.0f : 0.55f);
+    const Color color = lit ? COL_TEXT : ColorAlpha(COL_TEXT_DIM, urlSet ? 1.0f : 0.80f);
 
     DrawSpaced(g.font, text, x, y, size, LINK_SPACING, color);
 
-    // A permanent underline plus hover emphasis: the clickability has to be legible
-    // before the player tries it.
     const int lineY = (int)y + (int)h + 3;
     DrawLine((int)x, lineY, (int)(x + w), lineY,
              ColorAlpha(lit ? COL_TEXT : COL_EDGE, underlined ? 0.9f : 0.5f));
-    if (lit) DrawLine((int)x, lineY + 3, (int)(x + w), lineY + 3, ColorAlpha(COL_TEXT_DIM, 0.5f));
+    if (lit) DrawLine((int)x, lineY + 3, (int)(x + w), lineY + 3, ColorAlpha(COL_TEXT_FAINT, 0.95f));
 
     g.linkHover = hover;
 
@@ -216,163 +240,338 @@ bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hover)
     {
         clicked = true;
-        g.linkFocus = false;   // the click is consumed here; nothing else sees it
+        g.linkFocus = false;
     }
 
-    const bool fired = clicked || (active && g.linkFocus && urlSet);
-
+    const bool fired = clicked || ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
+                                    IsKeyPressed(KEY_KP_ENTER)) && g.linkFocus && urlSet);
     if (fired)
     {
+        sound::Pop();
         if (urlSet) platform::OpenUrl(g.itchUrl.c_str());
     }
 
     return fired;
 }
 
-//------------------------------------------------------------------------------------
-// Screens
-//------------------------------------------------------------------------------------
 void DrawMenu(Game& g)
 {
-    DrawTitle(g, GAME_TITLE, 150, 46, 8.0f, ColorAlpha(COL_TEXT, 0.95f));
-    DrawTitle(g, "everything is temporary", 206, 18, 4.0f, ColorAlpha(COL_TEXT_FAINT, 0.9f));
+    const Layout& l = CurrentLayout();
+    const float w = CardWidth(l);
+    const float rowH = w * 0.135f;
+    const float gap = rowH * 0.34f;
+    const int rows = g.hasSave ? 4 : 3;
 
-    int y = 300;
+    const float cardH = rowH * 2.6f + rows * (rowH + gap) + l.margin * 1.2f;
+    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
+    Card(card);
+
+    const float cx = card.x + w * 0.5f;
+    const float titleSize = std::min(w * 0.20f, 52.0f);
+    Heading(g, GAME_TITLE, cx, card.y + l.margin * 0.75f, titleSize, titleSize * 0.10f,
+            ColorAlpha(COL_TEXT, 0.95f));
+    Label(g, "everything is temporary", cx, card.y + l.margin * 0.75f + titleSize * 1.15f,
+          std::min(w * 0.062f, 18.0f), 3.0f, COL_TEXT_FAINT);
+
+    float y = card.y + rowH * 2.6f;
+    const Rectangle row = { card.x + w * 0.12f, 0.0f, w * 0.76f, rowH };
+
     if (g.hasSave)
     {
-        if (GuiButton(CenterBox(300, 50, y), "CONTINUE"))  ContinueGame(g, true);
-        y += 62;
+        if (UiButton(g, { row.x, y, row.width, row.height }, "Continue")) { ContinueGame(g, true); return; }
+        y += rowH + gap;
     }
 
-    if (GuiButton(CenterBox(300, 50, y), g.hasSave ? "START OVER" : "BEGIN")) StartNewGame(g);
-    y += 62;
+    if (UiButton(g, { row.x, y, row.width, row.height }, g.hasSave ? "Start Over" : "Begin"))
+    { StartNewGame(g); return; }
+    y += rowH + gap;
 
-    if (GuiButton(CenterBox(300, 50, y), "SETTINGS"))
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Settings"))
     {
         g.returnScreen = SCREEN_MENU;
         GoToScreen(g, SCREEN_SETTINGS);
+        return;
     }
-    y += 62;
+    y += rowH + gap;
 
-    if (GuiButton(CenterBox(300, 50, y), "QUIT")) CloseWindow();
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Quit")) CloseWindow();
 
-    // Honest status: which file the music actually came from, if any.
-    DrawStatus(g, sound::HasTrack() ? sound::TrackPath()
-                                    : "no music track found - drop one in assets/");
+    DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no music track found");
 }
 
 void DrawPause(Game& g)
 {
-    DrawRectangle(0, 0, SCREEN_W, SCREEN_H, COL_SCRIM);
+    const Layout& l = CurrentLayout();
+    const float w = CardWidth(l);
+    const float rowH = w * 0.135f;
+    const float gap = rowH * 0.34f;
+    const int rows = 4;
 
-    DrawTitle(g, "PAUSED", 236, 34, 7.0f, ColorAlpha(COL_TEXT, 0.95f));
+    const float cardH = rowH * 2.4f + rows * (rowH + gap) + l.margin;
+    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
+    Card(card);
 
-    int y = 320;
-    if (GuiButton(CenterBox(300, 50, y), "RESUME"))  GoToScreen(g, SCREEN_PLAYING);
-    y += 62;
-    if (GuiButton(CenterBox(300, 50, y), "SETTINGS"))
+    Heading(g, "Paused", card.x + w * 0.5f, card.y + l.margin, std::min(w * 0.16f, 38.0f), 6.0f,
+            ColorAlpha(COL_TEXT, 0.95f));
+
+    float y = card.y + rowH * 2.4f;
+    const Rectangle row = { card.x + w * 0.12f, 0.0f, w * 0.76f, rowH };
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Resume"))
+    { GoToScreen(g, SCREEN_PLAYING); return; }
+    y += rowH + gap;
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Settings"))
     {
         g.returnScreen = SCREEN_PAUSE;
         GoToScreen(g, SCREEN_SETTINGS);
+        return;
     }
-    y += 62;
-    if (GuiButton(CenterBox(300, 50, y), "BEGIN AGAIN")) RestartAttempt(g, false);
-    y += 62;
-    if (GuiButton(CenterBox(300, 50, y), "LEAVE"))   { SaveSession(g); GoToScreen(g, SCREEN_MENU); }
+    y += rowH + gap;
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Begin Again"))
+    { RestartAttempt(g, false); return; }
+    y += rowH + gap;
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Leave"))
+    { SaveSession(g); GoToScreen(g, SCREEN_MENU); }
 }
 
 void DrawSettings(Game& g)
 {
-    DrawTitle(g, "SETTINGS", 168, 34, 7.0f, ColorAlpha(COL_TEXT, 0.95f));
+    const Layout& l = CurrentLayout();
+    const float w = CardWidth(l) * 1.15f;
+    const float rowH = w * 0.125f;
 
-    // Raygui 5.1 sliders and checkboxes write through pointers.
-    const Rectangle slider = { SCREEN_W * 0.5f - 130.0f, 268.0f, 260.0f, 20.0f };
-    GuiSliderBar(slider, "VOLUME", "0 - 100", &g.settings.volume, 0.0f, 1.0f);
+    const float cardH = rowH * 7.6f + l.margin * 1.4f;
+    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
+    Card(card);
+
+    Heading(g, "Settings", card.x + w * 0.5f, card.y + l.margin * 0.8f,
+            std::min(w * 0.13f, 34.0f), 6.0f, ColorAlpha(COL_TEXT, 0.95f));
+
+    GuiSetFont(g.font);
+    const float x = card.x + w * 0.12f;
+    const float cw = w * 0.76f;
+    float y = card.y + rowH * 2.1f;
+
+    if (GuiSliderBar({ x, y, cw, 22.0f }, "Volume", "0 - 100", &g.settings.volume, 0.0f, 1.0f))
+        sound::Pop();
     sound::SetMasterVolume(g.settings.volume);
+    y += rowH * 1.35f;
 
-    const Rectangle memory = { SCREEN_W * 0.5f - 130.0f, 320.0f, 260.0f, 20.0f };
-    GuiSliderBar(memory, "MEMORY", "less", &g.settings.memory, 0.25f, 1.25f);
+    if (GuiSliderBar({ x, y, cw, 22.0f }, "Memory", "less", &g.settings.memory, 0.25f, 1.25f))
+        sound::Pop();
+    y += rowH * 1.5f;
 
-    const Rectangle skip = { SCREEN_W * 0.5f - 130.0f, 372.0f, 260.0f, 24.0f };
-    GuiCheckBox(skip, "SKIP INTRO AFTER FIRST PLAY", &g.settings.skipIntro);
+    if (GuiCheckBox({ x, y, cw, 24.0f }, "Skip Intro After First Play", &g.settings.skipIntro))
+        sound::Pop();
+    y += rowH * 2.4f;
 
-    const Rectangle bg = { SCREEN_W * 0.5f - 130.0f, 412.0f, 260.0f, 24.0f };
-    GuiCheckBox(bg, "USE assets/bg.png (PLACEHOLDER)", &g.settings.showBg);
+    const float bw = w * 0.44f;
+    if (UiButton(g, { card.x + (w - bw) * 0.5f, y, bw, rowH }, "Back"))
+        GoToScreen(g, g.returnScreen);
 
-    if (GuiButton(CenterBox(300, 50, 486), "BACK")) GoToScreen(g, g.returnScreen);
-
-    DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no audio track loaded (assets/)");
+    DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no audio track loaded");
 }
 
 void DrawCredits(Game& g)
 {
+    const Layout& l = CurrentLayout();
     const float t = std::min(1.0f, g.sceneTime / 1.6f);
-    const float a = t;
+    const float w = CardWidth(l) * 1.3f;
+    const float size = std::min(w * 0.045f, 17.0f);
+    const float gap = size * 1.9f;
 
-    DrawTitle(g, GAME_TITLE, 118, 40, 8.0f, ColorAlpha(COL_TEXT, a));
-    DrawTitle(g, "a game about temporary things", 166, 17, 4.0f, ColorAlpha(COL_TEXT_FAINT, a));
+    const float cardH = gap * 12.5f + l.margin * 1.6f;
+    const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
+    Card(card);
 
-    char stageLine[80];
-    std::snprintf(stageLine, sizeof(stageLine), "%d passages   %d tiles erased",
-                  STAGE_COUNT, g.board.emptiedTotal);
-    DrawTitle(g, stageLine, 206, 15, 2.0f, ColorAlpha(COL_TEXT_FAINT, a * 0.8f));
+    const float cx = card.x + w * 0.5f;
+    float y = card.y + l.margin;
 
-    DrawTitle(g, "made by", 262, 15, 3.0f, ColorAlpha(COL_TEXT_GHOST, a));
-    DrawTitle(g, ATF_AUTHOR, 286, 22, 3.0f, ColorAlpha(COL_TEXT_DIM, a));
+    Heading(g, GAME_TITLE, cx, y, std::min(w * 0.17f, 40.0f), 7.0f, ColorAlpha(COL_TEXT, t));
+    y += gap * 1.5f;
+    Label(g, "a game about temporary things", cx, y, size, 3.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
 
-    // Controls, so the credits also work as a reminder.
-    DrawTitle(g, "WASD / ARROWS - MOVE     R - BEGIN AGAIN     ESC - MENU",
-              338, 15, 2.0f, ColorAlpha(COL_TEXT_GHOST, a));
+    char buf[80];
+    std::snprintf(buf, sizeof(buf), "%d passages   %d tiles erased", STAGE_COUNT,
+                  g.board.emptiedTotal);
+    Label(g, buf, cx, y, size * 0.92f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap * 1.3f;
 
-    // Attribution: the engine, the UI kit, and the supplied music.
-    DrawTitle(g, "built with raylib and raygui (zlib)", 372, 15, 2.0f,
-              ColorAlpha(COL_TEXT_GHOST, a * 0.95f));
+    Label(g, "made by", cx, y, size * 0.92f, 3.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
+    Label(g, IFG_AUTHOR, cx, y, size * 1.25f, 3.0f, ColorAlpha(COL_TEXT_DIM, t));
+    y += gap * 1.3f;
 
-    std::string passageCredit = "music: none supplied";
-    if (sound::HasTrack()) passageCredit = "music: " + std::string(sound::TrackPath());
+    Label(g, "WASD / Arrows - Move     R - Begin Again     Esc - Menu", cx, y, size * 0.88f, 2.0f,
+          ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
+    Label(g, "built with raylib and raygui (zlib)", cx, y, size * 0.88f, 2.0f,
+          ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
 
-    std::string frameCredit = "opening, ending and settings: none supplied";
-    if (sound::HasFrameTrack())
-        frameCredit = "opening, ending and settings: " + std::string(sound::FrameTrackPath());
+    std::string music = "music: none found";
+    if (sound::HasTrack()) music = "music: " + std::string(sound::TrackPath());
+    Label(g, music.c_str(), cx, y, size * 0.88f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
 
-    DrawTitle(g, passageCredit.c_str(), 396, 15, 2.0f, ColorAlpha(COL_TEXT_GHOST, a * 0.95f));
-    DrawTitle(g, frameCredit.c_str(), 418, 15, 2.0f, ColorAlpha(COL_TEXT_GHOST, a * 0.95f));
+    Label(g, "type: DOSMIC and SERATONIN (personal use licence)", cx, y, size * 0.88f, 2.0f,
+          ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap * 1.4f;
 
-    // The itch.io page. If no URL was configured at build time the text says so rather
-    // than inventing a link.
-    const char* url = g.itchUrl.empty() ? "itch.io page not configured"
-                                        : g.itchUrl.c_str();
-    const float urlW = SpacedTextWidth(g.font, url, 20.0f, LINK_SPACING);
-    const float urlX = SCREEN_W * 0.5f - urlW * 0.5f;
+    const char* url = g.itchUrl.empty() ? "itch.io page not configured" : g.itchUrl.c_str();
+    const float urlSize = size * 1.15f;
+    const float urlW = SpacedTextWidth(g.font, url, urlSize, LINK_SPACING);
+    Label(g, "itch.io", cx, y, size * 0.88f, 3.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    y += gap;
+    DrawClickableLink(g, url, cx - urlW * 0.5f, y, urlSize, true);
+    y += gap * 1.2f;
 
-    DrawTitle(g, "itch.io", 436, 15, 3.0f, ColorAlpha(COL_TEXT_GHOST, a));
-    (void)DrawClickableLink(g, url, urlX, 458.0f, 20.0f, true);
+    Label(g, g.itchUrl.empty() ? "build with -DIFG_ITCH_URL=... or add assets/itch_url.txt"
+                               : "click the link, or TAB then ENTER",
+          cx, y, size * 0.85f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
 
-    if (!g.itchUrl.empty())
+    const float bw = (w - w * 0.10f) * 0.5f;
+    const float by = card.y + card.height - l.margin * 0.9f;
+    const float ebw = w * 0.40f;
+    const float eby = by;
+    const float ebh = l.margin * 1.9f;
+    const float egap = w * 0.04f;
+    if (UiButton(g, { cx - ebw - egap * 0.5f, eby, ebw, ebh }, "Play Again"))
+    { StartNewGame(g); return; }
+    UiButton(g, { cx + egap * 0.5f, eby, ebw, ebh }, "Main Menu");
+
+    if (t >= 1.0f)
+        Label(g, "R - Play Again", cx, l.screenH - l.margin * 0.35f, l.hintSize, 2.0f,
+              ColorAlpha(COL_TEXT_FAINT, 0.95f));
+}
+
+void LoadBackground(Game& g)
+{
+    const int n = (int)(sizeof(BG_IMAGE) / sizeof(BG_IMAGE[0]));
+    for (int i = 0; i < n; i++)
     {
-        DrawTitle(g, "click the link, or TAB then ENTER", 492, 14, 2.0f,
-                  ColorAlpha(COL_TEXT_GHOST, a * 0.8f));
+        if (!FileExists(BG_IMAGE[i])) continue;
+        Texture t = LoadTexture(BG_IMAGE[i]);
+        if (t.id == 0) continue;
+        g.bg = t;
+        g.bgLoaded = true;
+        return;
+    }
+}
+
+void UnloadBackground(Game& g)
+{
+    if (g.bgLoaded) UnloadTexture(g.bg);
+    g.bg = {};
+    g.bgLoaded = false;
+}
+
+enum { ICON_SOUND = 0, ICON_SETTINGS };
+
+bool UiIconButton(Game& g, Rectangle box, int icon)
+{
+    const int slot = g_buttons++;
+
+    const bool hover = CheckCollisionPointRec(GetMousePosition(), box);
+    if (hover) g.focus = slot;
+
+    const bool focused = (g.focus == slot);
+    const bool lit = hover || focused;
+    const float grow = lit ? HOVER_GROW : 1.0f;
+    const Rectangle s =
+    {
+        box.x + box.width * (1.0f - grow) * 0.5f,
+        box.y + box.height * (1.0f - grow) * 0.5f,
+        box.width * grow,
+        box.height * grow
+    };
+
+    const bool clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                         CheckCollisionPointRec(GetMousePosition(), s);
+    const bool fired = clicked || (focused && (IsKeyPressed(KEY_ENTER) ||
+                                               IsKeyPressed(KEY_SPACE)));
+
+    DrawRectangleRounded(s, CORNER_R, 4, COL_PANEL);
+    DrawRectangleRoundedLinesEx(s, CORNER_R, 4, 1.0f, lit ? COL_TEXT : COL_EDGE);
+
+    const float cx = s.x + s.width * 0.5f;
+    const float cy = s.y + s.height * 0.5f;
+    const float u  = s.width * 0.24f;
+    const Color ink = lit ? COL_TEXT : COL_EDGE;
+
+    if (icon == ICON_SOUND)
+    {
+        DrawRectangleRec({ cx - u * 1.30f, cy - u * 0.55f, u * 0.75f, u * 1.10f }, ink);
+        DrawTriangle({ cx - u * 0.60f, cy - u * 1.25f },
+                     { cx - u * 0.60f, cy + u * 1.25f },
+                     { cx + u * 0.45f, cy }, ink);
+        if (sound::IsMuted())
+        {
+            DrawLine(cx + u * 0.30f, cy - u * 1.00f, cx + u * 1.45f, cy + u * 1.00f, ink);
+            DrawLine(cx + u * 1.45f, cy - u * 1.00f, cx + u * 0.30f, cy + u * 1.00f, ink);
+        }
+        else
+        {
+            DrawCircleLines((int)(cx + u * 0.95f), (int)cy, u * 0.80f, ColorAlpha(ink, 0.75f));
+            DrawCircleLines((int)(cx + u * 0.95f), (int)cy, u * 1.35f, ColorAlpha(ink, 0.45f));
+        }
     }
     else
     {
-        DrawTitle(g, "build with -DATF_ITCH_URL=... or add assets/itch_url.txt", 492, 14, 2.0f,
-                  ColorAlpha(COL_TEXT_GHOST, a * 0.8f));
+        const float halfW = u * 1.55f;
+        const float rows[3] = { cy - u * 0.95f, cy, cy + u * 0.95f };
+        const float knob[3] = { -0.55f, 0.45f, -0.15f };
+        for (int i = 0; i < 3; i++)
+        {
+            DrawLine(cx - halfW, rows[i], cx + halfW, rows[i], ink);
+            DrawCircle((int)(cx + halfW * knob[i]), (int)rows[i], u * 0.42f, ink);
+        }
     }
 
-    // Ending choices, then the credits get out of the way.
-    int y = 552;
-    if (GuiButton(CenterBox(300, 46, y), "PLAY AGAIN")) StartNewGame(g);
-    if (GuiButton(CenterBox(300, 46, y + 56), "MAIN MENU")) GoToScreen(g, SCREEN_MENU);
-
-    if (a >= 1.0f)
+    if (fired)
     {
-        DrawSpacedCentered(g.font, "R - PLAY AGAIN", SCREEN_W * 0.5f, (float)SCREEN_H - 46.0f,
-                           14.0f, 2.0f, ColorAlpha(COL_TEXT_FAINT, 0.7f));
+        sound::Pop();
+        g.focus = slot;
+    }
+
+    return fired;
+}
+
+void DrawHudIcons(Game& g)
+{
+    const Layout& l = CurrentLayout();
+    g_buttons = 0;
+    g_focusDelta = 0;
+
+    const float sz  = l.hintSize * 2.3f;
+    const float pad = l.margin * 0.40f;
+    const float y   = l.margin * 0.20f;
+
+    const Rectangle settingsBox = { l.screenW - l.margin - sz, y, sz, sz };
+    const Rectangle soundBox    = { settingsBox.x - sz - pad, y, sz, sz };
+
+    if (UiIconButton(g, soundBox, ICON_SOUND))
+    {
+        g.settings.muted = !g.settings.muted;
+        sound::SetMuted(g.settings.muted);
+    }
+
+    if (UiIconButton(g, settingsBox, ICON_SETTINGS))
+    {
+        g.returnScreen = SCREEN_PLAYING;
+        GoToScreen(g, SCREEN_SETTINGS);
     }
 }
 
 void DrawScreenUi(Game& g)
 {
+    g_buttons = 0;
+    g_focusDelta = 0;
+
     switch (g.screen)
     {
         case SCREEN_MENU:     DrawMenu(g);     break;
@@ -381,6 +580,12 @@ void DrawScreenUi(Game& g)
         case SCREEN_CREDITS:  DrawCredits(g);  break;
         default: break;
     }
+
+    if (g_buttons > 0)
+    {
+        g.focus = std::clamp(g.focus + g_focusDelta, 0, g_buttons - 1);
+        if (g.focus == 0 && g_focusDelta < 0) g.focus = g_buttons - 1;
+    }
 }
 
-} // namespace witness
+}

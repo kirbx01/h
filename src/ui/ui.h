@@ -1,36 +1,43 @@
 #pragma once
 
-// Raygui's implementation lives in exactly one translation unit (ui.cpp) so the
-// RAYGUI_IMPLEMENTATION macro is never defined twice in a link.
-
 #include "game.h"
 
 #include <string>
 
 namespace witness {
 
-// Reads the itch.io address from assets/itch_url.txt, falling back to the value baked in
-// with -DATF_ITCH_URL=. Returns an empty string when neither is set.
+namespace sound {
+
+void Init();
+void Update(float dt);
+void SetMasterVolume(float v);
+void NotifyUserGesture();
+void Pop();
+void Shutdown();
+
+bool HasTrack();
+bool HasPop();
+const char* TrackPath();
+
+}
+
 std::string ResolveItchUrl();
 
-Font LoadUiFont(bool& loaded, int& size);
-void StyleUi(Font font);
-
-bool LoadBackground(Game& g);
+void LoadFonts(Game& g);
+void UnloadFonts(Game& g);
+void LoadBackground(Game& g);
 void UnloadBackground(Game& g);
-void DrawBackground(const Game& g);
+void DrawHudIcons(Game& g);
+void StyleUi();
 
-// Menus and credits. Only these screens use Raygui or panels; the play space stays
-// completely empty.
 void DrawScreenUi(Game& g);
 void DrawMenu(Game& g);
 void DrawPause(Game& g);
 void DrawSettings(Game& g);
 void DrawCredits(Game& g);
 
-// A genuinely clickable link: hit tested against the text bounds, hover feedback,
-// and activatable from the keyboard. Returns true on the frame it was activated.
+bool UiButton(Game& g, Rectangle box, const char* label);
 bool DrawClickableLink(Game& g, const char* text, float x, float y, float size,
                        bool underlined);
 
-} // namespace witness
+}
