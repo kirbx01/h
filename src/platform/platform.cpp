@@ -1,10 +1,10 @@
 #include "platform.h"
 
 #if defined(PLATFORM_WEB)
-#define ATF_WEB 1
+#define IFG_WEB 1
 #include <emscripten/emscripten.h>
 #else
-#define ATF_WEB 0
+#define IFG_WEB 0
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -20,17 +20,18 @@ namespace platform {
 
 namespace {
 
-constexpr const char* kAppFolder  = "after_the_fall";
+constexpr const char* kAppFolder  = "i_forgor";
 constexpr const char* kStateName  = "session.v1";
-constexpr const char* kStorageKey = "after_the_fall.session.v1";
+constexpr const char* kStorageKey = "i_forgor.session.v1";
 
-#if !ATF_WEB
+constexpr const char* kLegacyAppFolder  = "after_the_fall";
+constexpr const char* kLegacyStorageKey = "after_the_fall.session.v1";
 
-// Per-OS location for a tiny save file. Everything falls back to a temp dir so the
-// game still runs on locked-down machines (where it just forgets between runs).
-std::filesystem::path StatePath()
+#if !IFG_WEB
+
+std::filesystem::path StatePath(const char* appFolder)
 {
-    // Escape hatch for testing: SAVE_DIR=... redirects the save file somewhere harmless.
+
     if (const char* forced = getenv("SAVE_DIR"))
     {
         if (*forced) return std::filesystem::path(forced) / kStateName;
@@ -54,95 +55,12 @@ std::filesystem::path StatePath()
     else base = std::filesystem::temp_directory_path();
 #endif
 
-    return base / kAppFolder / kStateName;
+    return base / appFolder / kStateName;
 }
 
-#endif // !ATF_WEB
-
-#if ATF_WEB
-
-// Written with EM_JS rather than EM_ASM: the bodies are plain JavaScript with a C
-// signature, which is what the acorn pass in the JS optimiser can actually read. Every
-// call is guarded because localStorage throws outright in private mode.
-EM_JS(int, AtfLocalStorageGet, (const char* key, char* out, int cap), {
-    try {
-        var value = window.localStorage.getItem(UTF8ToString(key));
-        if (value === null) return 0;
-        stringToUTF8(value, out, cap);
-        return 1;
-    } catch (e) {
-        return 0;
-    }
-});
-
-EM_JS(void, AtfLocalStorageSet, (const char* key, const char* value), {
-    try {
-        window.localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
-    } catch (e) {
-        // private mode or a full quota: the game simply will not remember
-    }
-});
-
-EM_JS(void, AtfLocalStorageRemove, (const char* key), {
-    try {
-        window.localStorage.removeItem(UTF8ToString(key));
-    } catch (e) {
-    }
-});
-
-EM_JS(void, AtfOpenUrl, (const char* url), {
-    var target = UTF8ToString(url);
-    var opened = window.open(target, '_blank', 'noopener');
-    if (!opened) window.location.href = target;
-});
-
-bool WebGet(const char* key, char* out, int cap)
+bool ReadFile(const std::filesystem::path& path, std::string& out)
 {
-    return AtfLocalStorageGet(key, out, cap) != 0;
-}
-
-void WebSet(const char* key, const char* value)
-{
-    AtfLocalStorageSet(key, value);
-}
-
-void WebRemove(const char* key)
-{
-    AtfLocalStorageRemove(key);
-}
-
-#endif // ATF_WEB
-
-} // namespace
-
-bool IsWeb()
-{
-#if ATF_WEB
-    return true;
-#else
-    return false;
-#endif
-}
-
-void Init()
-{
-    // Nothing to set up: both backends are stateless files/localStorage.
-}
-
-void Shutdown()
-{
-}
-
-bool ReadState(std::string& out)
-{
-#if ATF_WEB
-    out.assign(4096, '\0');
-    if (!WebGet(kStorageKey, &out[0], 4096)) return false;
-    out.resize(std::char_traits<char>::length(out.c_str()));
-    return !out.empty();
-#else
     std::error_code ec;
-    const std::filesystem::path path = StatePath();
     if (!std::filesystem::exists(path, ec)) return false;
 
     std::FILE* f = std::fopen(path.string().c_str(), "rb");
@@ -153,17 +71,109 @@ bool ReadState(std::string& out)
     std::fclose(f);
     out.resize(got);
     return got > 0;
+}
+
+#endif
+
+#if IFG_WEB
+
+EM_JS(int, IfgLocalStorageGet, (const char* key, char* out, int cap), {
+    try {
+        var value = window.localStorage.getItem(UTF8ToString(key));
+        if (value === null) return 0;
+        stringToUTF8(value, out, cap);
+        return 1;
+    } catch (e) {
+        return 0;
+    }
+});
+
+EM_JS(void, IfgLocalStorageSet, (const char* key, const char* value), {
+    try {
+        window.localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
+    } catch (e) {
+
+    }
+});
+
+EM_JS(void, IfgLocalStorageRemove, (const char* key), {
+    try {
+        window.localStorage.removeItem(UTF8ToString(key));
+    } catch (e) {
+    }
+});
+
+EM_JS(void, IfgOpenUrl, (const char* url), {
+    var target = UTF8ToString(url);
+    var opened = window.open(target, '_blank', 'noopener');
+    if (!opened) window.location.href = target;
+});
+
+bool WebGet(const char* key, char* out, int cap)
+{
+    return IfgLocalStorageGet(key, out, cap) != 0;
+}
+
+void WebSet(const char* key, const char* value)
+{
+    IfgLocalStorageSet(key, value);
+}
+
+void WebRemove(const char* key)
+{
+    IfgLocalStorageRemove(key);
+}
+
+#endif
+
+}
+
+bool IsWeb()
+{
+#if IFG_WEB
+    return true;
+#else
+    return false;
+#endif
+}
+
+void Init()
+{
+
+}
+
+void Shutdown()
+{
+}
+
+bool ReadState(std::string& out)
+{
+#if IFG_WEB
+    out.assign(4096, '\0');
+    if (WebGet(kStorageKey, &out[0], 4096))
+    {
+        out.resize(std::char_traits<char>::length(out.c_str()));
+        return !out.empty();
+    }
+
+    out.assign(4096, '\0');
+    if (!WebGet(kLegacyStorageKey, &out[0], 4096)) return false;
+    out.resize(std::char_traits<char>::length(out.c_str()));
+    return !out.empty();
+#else
+    if (ReadFile(StatePath(kAppFolder), out)) return true;
+    return ReadFile(StatePath(kLegacyAppFolder), out);
 #endif
 }
 
 bool WriteState(const std::string& data)
 {
-#if ATF_WEB
+#if IFG_WEB
     if (data.empty()) return false;
     WebSet(kStorageKey, data.c_str());
     return true;
 #else
-    const std::filesystem::path path = StatePath();
+    const std::filesystem::path path = StatePath(kAppFolder);
 
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
@@ -179,11 +189,11 @@ bool WriteState(const std::string& data)
 
 void ClearState()
 {
-#if ATF_WEB
+#if IFG_WEB
     WebRemove(kStorageKey);
 #else
     std::error_code ec;
-    std::filesystem::remove(StatePath(), ec);
+    std::filesystem::remove(StatePath(kAppFolder), ec);
 #endif
 }
 
@@ -191,8 +201,6 @@ void OpenUrl(const char* url)
 {
     if (!url || !*url) return;
 
-    // Only accept a plain web address. This doubles as shell-injection protection
-    // because the value ends up on a command line on some platforms.
     const char* prefixes[] = { "https://", "http://" };
     bool ok = false;
     for (const char* p : prefixes)
@@ -212,21 +220,20 @@ void OpenUrl(const char* url)
         if (!safe) return;
     }
 
-#if ATF_WEB
-    AtfOpenUrl(url);
+#if IFG_WEB
+    IfgOpenUrl(url);
 #elif defined(_WIN32)
     ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 #elif defined(__APPLE__)
     const std::string cmd = std::string("open '") + url + "'";
     std::system(cmd.c_str());
 #else
-    // xdg-open is the standard, but fall back to gio / sensible-browser on
-    // desktops that ship a different portal setup.
+
     const std::string cmd = std::string("xdg-open '") + url + "' 2>/dev/null || gio open '" + url +
                             "' 2>/dev/null || sensible-browser '" + url + "' >/dev/null 2>&1";
     std::system(cmd.c_str());
 #endif
 }
 
-} // namespace platform
-} // namespace witness
+}
+}

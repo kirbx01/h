@@ -9,15 +9,9 @@ namespace witness {
 
 namespace {
 
-constexpr const char* SAVE_MAGIC = "ATF1";   // bump when the format changes
+constexpr const char* SAVE_MAGIC = "IFG1";
+constexpr const char* SAVE_MAGIC_LEGACY = "ATF1";
 
-// The save is intentionally tiny and human readable:
-//   ATF1
-//   stage=2
-//   emptied=1
-//   t=5:0            <- tile 5 has 0 pips left
-// Only tiles that differ from the initial layout are written, so the file stays a
-// few dozen bytes no matter how much of the board the player has destroyed.
 std::string Serialize(const Game& g)
 {
     std::string out = SAVE_MAGIC;
@@ -35,7 +29,7 @@ std::string Serialize(const Game& g)
     for (int i = 0; i < MAX_TILES; i++)
     {
         const Domino& d = g.board.tiles[i];
-        if (d.pipsLeft == TileTotalPips(d)) continue;   // untouched
+        if (d.pipsLeft == TileTotalPips(d)) continue;
 
         std::snprintf(buf, sizeof(buf), "\nt=%d:%d", i, d.pipsLeft);
         out += buf;
@@ -45,8 +39,6 @@ std::string Serialize(const Game& g)
     return out;
 }
 
-// Reads a single "key=value" pair out of the blob. Tiny hand parser on purpose: it
-// avoids depending on std::regex (heavy) or pulling the whole text into another format.
 bool Field(const std::string& text, const char* key, int& out)
 {
     char pattern[64];
@@ -59,14 +51,14 @@ bool Field(const std::string& text, const char* key, int& out)
     return true;
 }
 
-} // namespace
+}
 
 bool LoadSession(Game& g)
 {
     std::string text;
     if (!platform::ReadState(text)) return false;
 
-    if (text.rfind(SAVE_MAGIC, 0) != 0) return false;
+    if (text.rfind(SAVE_MAGIC, 0) != 0 && text.rfind(SAVE_MAGIC_LEGACY, 0) != 0) return false;
 
     InitBoard(g.board);
 
@@ -75,8 +67,6 @@ bool LoadSession(Game& g)
     if (!Field(text, "stage", stage)) return false;
     Field(text, "emptied", emptied);
 
-    // Tile records: "t=<index>:<pips>". Anything out of range is ignored rather than
-    // trusted, so a hand-edited or truncated file cannot corrupt the board.
     size_t at = 0;
     while ((at = text.find("\nt=", at)) != std::string::npos)
     {
@@ -120,4 +110,4 @@ void ClearSession()
     platform::ClearState();
 }
 
-} // namespace witness
+}
