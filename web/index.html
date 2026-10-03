@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AFTER THE FALL</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #060607;
+    color: #8c8c8c;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    overflow: hidden;
+  }
+
+  #wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  canvas {
+    image-rendering: pixelated;
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    display: block;
+  }
+
+  /* Shown until the module has loaded. Replaced by the canvas once it is up. */
+  #boot {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    letter-spacing: 0.35em;
+    font-size: 13px;
+    text-transform: uppercase;
+    pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+
+  #boot.gone { opacity: 0; }
+
+  #progress {
+    position: absolute;
+    left: 50%;
+    bottom: 12%;
+    width: 220px;
+    height: 1px;
+    background: #1c1c1d;
+    transform: translateX(-50%);
+  }
+
+  #progress i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: #d8d8d8;
+    transition: width 0.2s ease;
+  }
+
+  #note {
+    position: absolute;
+    left: 50%;
+    bottom: 6%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: #4a4a4a;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="boot">
+    <div style="text-align:center">
+      <div>AFTER THE FALL</div>
+      <div id="progress"><i></i></div>
+    </div>
+  </div>
+</div>
+<div id="note">wasd or arrows to move</div>
+
+<script>
+  var Module = {
+    preRun: [],
+    postRun: [],
+    print: function (text) { console.log(text); },
+    printErr: function (text) { console.error(text); },
+    setStatus: function (text) {
+      if (!text) {
+        document.getElementById('boot').classList.add('gone');
+        return;
+      }
+      // The default status line duplicates the title above it, so it is dropped.
+      document.getElementById('boot').firstElementChild.firstElementChild.textContent = text;
+    },
+    monitorRunDependencies: function (left) {
+      var bar = document.querySelector('#progress i');
+      if (!bar) return;
+
+      var total = left;
+      function tick() {
+        bar.style.width = (100 * (1 - left / (total || 1))) + '%';
+        if (left > 0) setTimeout(tick, 120);
+      }
+      tick();
+    },
+    canvas: (function () {
+      var c = document.createElement('canvas');
+      // The game is fixed at 1280x720; anything else is scaled by the CSS above.
+      c.width = 1280;
+      c.height = 720;
+      return c;
+    })()
+  };
+
+  Module.canvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault();
+    console.warn('webgl context lost');
+  }, false);
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

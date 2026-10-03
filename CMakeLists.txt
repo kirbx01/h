@@ -54,6 +54,12 @@ foreach(required "${RAYLIB_DIR}/CMakeLists.txt" "${RAYGUI_DIR}/src/raygui.h")
     endif()
 endforeach()
 
+# raylib's own platform option defaults to Desktop and does not notice emscripten, so it
+# is set here before its build description is read.
+if(EMSCRIPTEN AND NOT PLATFORM)
+    set(PLATFORM "Web" CACHE STRING "" FORCE)
+endif()
+
 # raylib picks its own backend from the generator, so nothing has to be forced here.
 add_subdirectory("${RAYLIB_DIR}" raylib EXCLUDE_FROM_ALL)
 
@@ -90,6 +96,12 @@ set_target_properties(after_the_fall PROPERTIES
     WIN32_EXECUTABLE OFF)
 
 if(EMSCRIPTEN)
+    # What gets preloaded into the browser's virtual filesystem. The default is the whole
+    # assets folder; scripts/build_web.sh points it at a staged copy that leaves the source
+    # WAV files out, because 43 MB of audio is nobody's idea of a first load.
+    set(ATF_WEB_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets" CACHE PATH
+        "Folder preloaded into the web build")
+
     # A frame-synced game and a music stream both need the loop to yield; ASYNCIFY is what
     # lets the browser breathe between frames without changing the game loop.
     target_link_options(after_the_fall PRIVATE
@@ -98,7 +110,7 @@ if(EMSCRIPTEN)
         "-sALLOW_MEMORY_GROWTH=1"
         "-sFORCE_FILESYSTEM=1"
         "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
-        "--preload-file=${CMAKE_CURRENT_SOURCE_DIR}/assets@assets")
+        "--preload-file=${ATF_WEB_ASSET_DIR}@assets")
     set_target_properties(after_the_fall PROPERTIES SUFFIX ".html")
 endif()
 

@@ -61,32 +61,54 @@ std::filesystem::path StatePath()
 
 #if ATF_WEB
 
+// Written with EM_JS rather than EM_ASM: the bodies are plain JavaScript with a C
+// signature, which is what the acorn pass in the JS optimiser can actually read. Every
+// call is guarded because localStorage throws outright in private mode.
+EM_JS(int, AtfLocalStorageGet, (const char* key, char* out, int cap), {
+    try {
+        var value = window.localStorage.getItem(UTF8ToString(key));
+        if (value === null) return 0;
+        stringToUTF8(value, out, cap);
+        return 1;
+    } catch (e) {
+        return 0;
+    }
+});
+
+EM_JS(void, AtfLocalStorageSet, (const char* key, const char* value), {
+    try {
+        window.localStorage.setItem(UTF8ToString(key), UTF8ToString(value));
+    } catch (e) {
+        // private mode or a full quota: the game simply will not remember
+    }
+});
+
+EM_JS(void, AtfLocalStorageRemove, (const char* key), {
+    try {
+        window.localStorage.removeItem(UTF8ToString(key));
+    } catch (e) {
+    }
+});
+
+EM_JS(void, AtfOpenUrl, (const char* url), {
+    var target = UTF8ToString(url);
+    var opened = window.open(target, '_blank', 'noopener');
+    if (!opened) window.location.href = target;
+});
+
 bool WebGet(const char* key, char* out, int cap)
 {
-    return EM_ASM_INT({
-        const char* k = UTF8ToString($0);
-        try {
-            const v = window.localStorage.getItem(k);
-            if (v === null) return 0;
-            stringToUTF8(v, HEAPU8, $2, $1);
-            return 1;
-        } catch (e) { return 0; }
-    }, key, cap, out) != 0;
+    return AtfLocalStorageGet(key, out, cap) != 0;
 }
 
 void WebSet(const char* key, const char* value)
 {
-    EM_ASM({
-        try { window.localStorage.setItem(UTF8ToString($0), UTF8ToString($1)); }
-        catch (e) { /* private mode / quota: the game simply will not remember */ }
-    }, key, value);
+    AtfLocalStorageSet(key, value);
 }
 
 void WebRemove(const char* key)
 {
-    EM_ASM({
-        try { window.localStorage.removeItem(UTF8ToString($0)); } catch (e) {}
-    }, key);
+    AtfLocalStorageRemove(key);
 }
 
 #endif // ATF_WEB
@@ -191,11 +213,7 @@ void OpenUrl(const char* url)
     }
 
 #if ATF_WEB
-    EM_ASM({
-        const u = UTF8ToString($0);
-        const w = window.open(u, '_blank', 'noopener');
-        if (!w) window.location.href = u;
-    }, url);
+    AtfOpenUrl(url);
 #elif defined(_WIN32)
     ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
 #elif defined(__APPLE__)

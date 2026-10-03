@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# Web build through emscripten. Emits a folder that can be served from any static host,
+# or opened from disk with a local server.
+#
+#   scripts/build_web.sh
+#
+# Needs the emsdk on PATH (source emsdk/emsdk_env.sh, or point EMSDK at it).
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+BUILD_DIR="${BUILD_DIR:-build-web}"
+DIST_DIR="${DIST_DIR:-dist/after_the_fall-web}"
+
+if ! command -v emcmake >/dev/null 2>&1; then
+    echo "emcmake is not on PATH." >&2
+    echo "Install the emsdk and source its emsdk_env.sh first." >&2
+    exit 1
+fi
+
+[ -e external/raylib/CMakeLists.txt ] || scripts/fetch_deps.sh
+
+# Only the compressed audio goes into the browser build. The source WAVs are the same two
+# recordings, only forty times the bytes, and the loader prefers .ogg anyway. If there is
+# no compressed copy at all then the WAV is all there is, so it is used instead.
+STAGE_DIR="${STAGE_DIR:-$BUILD_DIR/web-assets}"
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+
+shopt -s nullglob
+compressed=(assets/*.ogg assets/*.mp3 assets/*.qoa assets/*.xm assets/*.mod)
+raw=(assets/*.wav assets/*.flac)
+
+if [ ${#compressed[@]} -gt 0 ]; then
+    cp "${compressed[@]}" "$STAGE_DIR/"
+else
+    cp "${raw[@]}" "$STAGE_DIR/"
+fi
+cp assets/itch_url.txt "$STAGE_DIR/" 2>/dev/null || true
+shopt -u nullglob
+
+echo "preloading $(du -sh "$STAGE_DIR" | cut -f1) of audio into the web build"
+
+emcmake cmake -S . -B "$BUILD_DIR" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DPLATFORM=Web \
+      -DATF_WEB_ASSET_DIR="$STAGE_DIR" \
+      -DATF_BUILD_TESTS=OFF \
+      -DATF_BUILD_CAPTURE=OFF \
+      ${ATF_ITCH_URL:+-DATF_ITCH_URL="$ATF_ITCH_URL"}
+
+cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
+
+rm -rf "$DIST_DIR"
+mkdir -p "$DIST_DIR"
+
+# The preloaded folder, the page, the code and the data all have to travel together.
+for f in after_the_fall.html after_the_fall.js after_the_fall.wasm after_the_fall.data; do
+    [ -e "$BUILD_DIR/bin/$f" ] && cp "$BUILD_DIR/bin/$f" "$DIST_DIR/"
+done
+
+# Serve it: emscripten's own server, or anything else that hands out the right types.
+if command -v emrun >/dev/null 2>&1; then
+    echo
+    echo "built $DIST_DIR"
+    echo "try it with:  emrun $BUILD_DIR/bin/after_the_fall.html"
+else
+    echo
+    echo "built $DIST_DIR"
+fi
