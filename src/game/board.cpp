@@ -7,8 +7,7 @@ namespace witness {
 
 namespace {
 
-constexpr float TILE_SHORT = 40.5f;
-constexpr float TILE_LONG  = 90.0f;
+constexpr float PIP_MISMATCH_PENALTY = 2.0f;
 
 constexpr struct
 {
@@ -18,33 +17,32 @@ constexpr struct
     bool  keystone;
 } LAYOUT[] =
 {
+    { 122.0f, 590.0f, false, 6, 6, false },
+    { 256.0f, 476.0f, false, 0, 1, true  },
+    { 390.0f, 370.0f, false, 5, 5, false },
+    { 524.0f, 252.0f, false, 4, 4, false },
 
-    { 210.0f, 590.0f, false, 6, 6, false },
-    { 272.0f, 543.0f, false, 0, 1, true  },
-    { 334.0f, 496.0f, false, 5, 5, false },
-    { 396.0f, 449.0f, false, 4, 4, false },
+    { 658.0f, 476.0f, true,  2, 6, false },
+    { 792.0f, 476.0f, true,  5, 6, false },
+    { 658.0f, 370.0f, true,  1, 2, true  },
+    { 792.0f, 370.0f, true,  3, 3, false },
 
-    { 566.0f, 424.0f, true,  2, 6, false },
-    { 656.0f, 424.0f, true,  5, 6, false },
-    { 566.0f, 352.0f, true,  1, 2, true  },
-    { 656.0f, 352.0f, true,  3, 3, false },
+    { 926.0f, 252.0f, false, 6, 5, false },
+    { 926.0f, 134.0f, true,  2, 3, true  },
+    { 1060.0f, 370.0f, false, 4, 6, false },
+    { 926.0f, 370.0f, false, 0, 3, true  },
 
-    { 948.0f, 300.0f, false, 6, 5, false },
-    { 1012.0f, 252.0f, false, 2, 3, true  },
-    { 1076.0f, 300.0f, false, 4, 6, false },
-    { 1012.0f, 348.0f, false, 0, 3, true  },
-
-    { 470.0f, 604.0f, true,  6, 4, false },
-    { 772.0f, 528.0f, false, 3, 5, false },
-    { 872.0f, 432.0f, true,  0, 2, true  },
-    { 704.0f, 626.0f, true,  1, 3, false },
+    { 390.0f, 590.0f, true,  6, 4, false },
+    { 792.0f, 590.0f, true,  3, 5, false },
+    { 1060.0f, 590.0f, true, 0, 2, true  },
+    { 658.0f, 590.0f, true,  1, 3, false },
 };
 
 static_assert(sizeof(LAYOUT) / sizeof(LAYOUT[0]) == MAX_TILES, "layout must fill the board");
 
 }
 
-const Vector2 BALL_START = { 104.0f, 652.0f };
+const Vector2 BALL_START = { 122.0f, 664.0f };
 
 int TileTotalPips(const Domino& d)
 {
@@ -73,6 +71,8 @@ void InitBoard(Board& b)
         d.horizontal= LAYOUT[i].horizontal;
         d.valueA    = LAYOUT[i].a;
         d.valueB    = LAYOUT[i].b;
+        d.consumedA = false;
+        d.consumedB = false;
         d.pipsLeft  = LAYOUT[i].a + LAYOUT[i].b;
         d.gone      = false;
         d.keystone  = LAYOUT[i].keystone;
@@ -84,17 +84,29 @@ void InitBoard(Board& b)
     b.sealNeed = cfg.sealNeed;
 }
 
-static void StripTile(Game& g, Domino& d, float impact)
+static void StripTile(Game& g, Domino& d, bool halfA)
 {
     if (d.gone || d.hitCool > 0.0f) return;
 
-    const int strip = PIPS_PER_HIT + (impact >= PIPS_BONUS_SPEED ? PIPS_BONUS_HIT : 0);
+    const int consumed = halfA ? d.valueA : d.valueB;
+    if (halfA)
+    {
+        if (d.consumedA) return;
+        d.consumedA = true;
+        d.valueA = 0;
+    }
+    else
+    {
+        if (d.consumedB) return;
+        d.consumedB = true;
+        d.valueB = 0;
+    }
 
-    d.pipsLeft -= strip;
+    d.pipsLeft = std::max(0, d.pipsLeft - consumed);
     d.hitFlash  = 1.0f;
     d.hitCool   = HIT_COOLDOWN;
 
-    if (d.pipsLeft <= 0)
+    if (d.consumedA && d.consumedB)
     {
         d.pipsLeft = 0;
         d.gone     = true;
@@ -102,6 +114,30 @@ static void StripTile(Game& g, Domino& d, float impact)
         g.board.emptiedTotal++;
 
         if (!g.board.sealOpen && g.board.emptied >= g.board.sealNeed) g.board.sealOpen = true;
+    }
+}
+
+static void ActivateDomino(Game& g, Domino& d)
+{
+    if (d.gone || d.hitCool > 0.0f) return;
+
+    if (!d.consumedA && g.ball.pipValue == d.valueA)
+    {
+        const int nextValue = d.valueB;
+        StripTile(g, d, true);
+        g.ball.pipValue = nextValue;
+    }
+    else if (!d.consumedB && g.ball.pipValue == d.valueB)
+    {
+        const int nextValue = d.valueA;
+        StripTile(g, d, false);
+        g.ball.pipValue = nextValue;
+    }
+    else
+    {
+        d.hitFlash = 1.0f;
+        d.hitCool = HIT_COOLDOWN;
+        g.stageTime += PIP_MISMATCH_PENALTY;
     }
 }
 
@@ -229,14 +265,14 @@ void UpdateBall(Game& g, float dt)
             strongestAngle  = std::atan2(-(b.vel.y), -(b.vel.x));
         }
 
-        if (impact >= EROSION_SPEED) StripTile(g, d, impact);
+        if (impact >= EROSION_SPEED) ActivateDomino(g, d);
     }
 
     if (!g.board.sealOpen)
     {
         const Rectangle doorBox = { DOOR_X, DOOR_Y, DOOR_W, DOOR_H };
         float impact = 0.0f;
-        if (ResolveCircleBox(b.pos, b.vel, b.radius, doorBox, 0.22f, impact) && impact > 60.0f)
+        if (ResolveCircleBox(b.pos, b.vel, b.radius, doorBox, 0.70f, impact) && impact > 60.0f)
         {
             strongestImpact = std::max(strongestImpact, impact);
             strongestAngle  = std::atan2(-(b.vel.y), -(b.vel.x));
@@ -261,7 +297,8 @@ void UpdateBall(Game& g, float dt)
     }
 
     const float m = 26.0f;
-    if (b.pos.x < -m || b.pos.x > SCREEN_W + m || b.pos.y < -m || b.pos.y > SCREEN_H + m)
+    if (b.pos.x < -m || b.pos.x > (float)DESIGN_W + m ||
+        b.pos.y < -m || b.pos.y > (float)DESIGN_H + m)
     {
         b.lost      = true;
         b.lostTimer = 0.0f;

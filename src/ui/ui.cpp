@@ -32,9 +32,14 @@ namespace {
 
 constexpr float LINK_SPACING = 3.0f;
 constexpr float HOVER_GROW   = 1.16f;
+constexpr Color HOVER_TEXT   = { 0x88, 0x08, 0x08, 255 };
 
 int g_buttons = 0;
 int g_focusDelta = 0;
+
+// Keyboard focus is only advertised once the player has actually navigated, so a fresh frame
+// does not come up with the first control underlined.
+bool g_focusArmed = false;
 
 Font LoadFirst(const char* const* paths, int count, int size, const char* const* system,
                int systemCount, bool& loaded)
@@ -80,23 +85,15 @@ float CardWidth(const Layout& l) { return std::clamp(l.screenW * 0.40f, 250.0f, 
 void Row(Rectangle box, const char* label, bool hover, bool focus, const Font& font)
 {
     const float size = box.height * 0.34f;
-    const Color c = (hover || focus) ? COL_TEXT : COL_TEXT;
+    const Color color = (hover || focus) ? HOVER_TEXT : COL_TEXT;
     DrawSpacedCentered(font, label, box.x + box.width * 0.5f,
-                       box.y + (box.height - size) * 0.5f, size, size * 0.16f, COL_TEXT);
+                       box.y + (box.height - size) * 0.5f, size, size * 0.16f, color);
     if (hover || focus)
     {
         const float w = SpacedTextWidth(font, label, size, size * 0.16f);
         DrawLine(box.x + box.width * 0.5f - w * 0.5f, box.y + (box.height - size) * 0.5f + size,
-                 box.x + box.width * 0.5f + w * 0.5f, box.y + (box.height - size) * 0.5f + size, COL_TEXT);
+                 box.x + box.width * 0.5f + w * 0.5f, box.y + (box.height - size) * 0.5f + size, color);
     }
-}
-
-void DrawStatus(const Game& g, const char* text)
-{
-    if (!text || !*text) return;
-    const Layout& l = CurrentLayout();
-    DrawSpacedCentered(g.font, text, l.screenW * 0.5f, l.screenH - l.margin * 0.55f,
-                       l.hintSize, l.hintSpacing, ColorAlpha(COL_TEXT_FAINT, 1.0f));
 }
 
 void Heading(const Game& g, const char* text, float cx, float y, float size, float spacing,
@@ -131,7 +128,8 @@ std::string ResolveItchUrl()
             if (!url.empty()) return url;
         }
     }
-    return std::string(IFG_ITCH_URL);
+    return IFG_ITCH_URL[0] ? std::string(IFG_ITCH_URL)
+                            : std::string("https://kirbx01.itch.io/i-forgor");
 }
 
 void LoadFonts(Game& g)
@@ -162,7 +160,7 @@ void StyleUi()
     GuiSetStyle(DEFAULT, BORDER_COLOR_FOCUSED, ColorToInt(COL_TEXT));
     GuiSetStyle(DEFAULT, BORDER_COLOR_PRESSED, ColorToInt(COL_TEXT));
     GuiSetStyle(DEFAULT, TEXT_COLOR_NORMAL,    ColorToInt(COL_TEXT_DIM));
-    GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED,   ColorToInt(COL_TEXT));
+    GuiSetStyle(DEFAULT, TEXT_COLOR_FOCUSED,   ColorToInt(HOVER_TEXT));
     GuiSetStyle(DEFAULT, TEXT_COLOR_DISABLED,  ColorToInt(COL_TEXT_GHOST));
     GuiSetStyle(BUTTON, BORDER_WIDTH, 1);
     GuiSetStyle(SLIDER, SLIDER_WIDTH, 12);
@@ -220,14 +218,14 @@ bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, 
                         g.itchUrl.compare(0, 7, "http://") == 0;
 
     const bool lit = (hover || g.linkFocus) && urlSet;
-    const Color color = lit ? COL_TEXT : ColorAlpha(COL_TEXT_DIM, urlSet ? 1.0f : 0.80f);
+    const Color color = lit ? HOVER_TEXT : ColorAlpha(COL_TEXT_DIM, urlSet ? 1.0f : 0.80f);
 
     DrawSpaced(g.font, text, x, y, size, LINK_SPACING, color);
 
     const int lineY = (int)y + (int)h + 3;
     DrawLine((int)x, lineY, (int)(x + w), lineY,
-             ColorAlpha(lit ? COL_TEXT : COL_EDGE, underlined ? 0.9f : 0.5f));
-    if (lit) DrawLine((int)x, lineY + 3, (int)(x + w), lineY + 3, ColorAlpha(COL_TEXT_FAINT, 0.95f));
+             ColorAlpha(lit ? HOVER_TEXT : COL_EDGE, underlined ? 0.9f : 0.5f));
+    if (lit) DrawLine((int)x, lineY + 3, (int)(x + w), lineY + 3, ColorAlpha(HOVER_TEXT, 0.95f));
 
     g.linkHover = hover;
 
@@ -255,7 +253,7 @@ void DrawMenu(Game& g)
     const float w = CardWidth(l);
     const float rowH = w * 0.135f;
     const float gap = rowH * 0.34f;
-    const int rows = g.hasSave ? 4 : 3;
+    const int rows = g.hasSave ? 5 : 4;
 
     const float menuH = rows * (rowH + gap);
     const float cx = l.screenW * 0.5f;
@@ -277,6 +275,17 @@ void DrawMenu(Game& g)
 
     if (UiButton(g, { row.x, y, row.width, row.height }, g.hasSave ? "Start Over" : "Begin"))
     { StartNewGame(g); return; }
+    y += rowH + gap;
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "How to Win"))
+    {
+        g.returnScreen = SCREEN_MENU;
+        g.helpPage = 0;
+        g.focus = 1;
+        g.helpInputLock = true;
+        GoToScreen(g, SCREEN_HELP);
+        return;
+    }
     y += rowH + gap;
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Settings"))
@@ -363,7 +372,6 @@ void DrawSettings(Game& g)
     if (UiButton(g, { cx - bw * 0.5f, y, bw, rowH }, "Back"))
         GoToScreen(g, g.returnScreen);
 
-    DrawStatus(g, sound::HasTrack() ? sound::TrackPath() : "no audio track loaded");
 }
 
 void DrawCredits(Game& g)
@@ -371,7 +379,7 @@ void DrawCredits(Game& g)
     const Layout& l = CurrentLayout();
     const float t = std::min(1.0f, g.sceneTime / 1.6f);
     const float w = CardWidth(l) * 1.3f;
-    const float size = std::min(w * 0.045f, 17.0f);
+    const float size = std::min(w * 0.047f, 18.0f);
     const float gap = size * 1.9f;
 
     const float cardH = gap * 12.5f + l.margin * 1.6f;
@@ -409,7 +417,7 @@ void DrawCredits(Game& g)
     Label(g, music.c_str(), cx, y, size * 0.88f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
     y += gap;
 
-    Label(g, "type: DOSMIC and SERATONIN (personal use licence)", cx, y, size * 0.88f, 2.0f,
+    Label(g, "type: Dosmic and Seratonin (personal use licence)", cx, y, size * 0.88f, 2.0f,
           ColorAlpha(COL_TEXT_FAINT, t));
     y += gap * 1.4f;
 
@@ -436,8 +444,13 @@ void DrawCredits(Game& g)
     UiButton(g, { cx + egap * 0.5f, eby, ebw, ebh }, "Main Menu");
 
     if (t >= 1.0f)
-        Label(g, "R - Play Again", cx, l.screenH - l.margin * 0.35f, l.hintSize, 2.0f,
-              ColorAlpha(COL_TEXT_FAINT, 0.95f));
+    {
+        const char* restartHint = "R - Play Again";
+        const float restartWidth = SpacedTextWidth(g.font, restartHint, l.hintSize, 2.0f);
+        DrawSpaced(g.font, restartHint, l.screenW - l.margin - restartWidth,
+                   l.screenH - l.hintSize - l.margin * 0.35f, l.hintSize, 2.0f,
+                   ColorAlpha(COL_TEXT_FAINT, 0.95f));
+    }
 }
 
 void LoadBackground(Game& g)
@@ -461,68 +474,33 @@ void UnloadBackground(Game& g)
     g.bgLoaded = false;
 }
 
-enum { ICON_SOUND = 0, ICON_SETTINGS };
-
-bool UiIconButton(Game& g, Rectangle box, int icon)
+// A HUD control is just its label: the hitbox is the measured text bounds, so there is no
+// button chrome to misread and no circular badge sitting over the playfield.
+bool UiTextControl(Game& g, Rectangle box, const char* label, float size, float spacing,
+                  Color idleColor)
 {
     const int slot = g_buttons++;
+
+    if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_TAB)) g_focusDelta++;
+    if (IsKeyPressed(KEY_UP)) g_focusDelta--;
 
     const bool hover = CheckCollisionPointRec(GetMousePosition(), box);
     if (hover) g.focus = slot;
 
     const bool focused = (g.focus == slot);
     const bool lit = hover || focused;
-    const float grow = lit ? HOVER_GROW : 1.0f;
-    const Rectangle s =
-    {
-        box.x + box.width * (1.0f - grow) * 0.5f,
-        box.y + box.height * (1.0f - grow) * 0.5f,
-        box.width * grow,
-        box.height * grow
-    };
 
     const bool clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-                         CheckCollisionPointRec(GetMousePosition(), s);
+                         CheckCollisionPointRec(GetMousePosition(), box);
     const bool fired = clicked || (focused && (IsKeyPressed(KEY_ENTER) ||
-                                               IsKeyPressed(KEY_SPACE)));
+                                               IsKeyPressed(KEY_SPACE) ||
+                                               IsKeyPressed(KEY_KP_ENTER)));
 
-    const float rad = s.width * 0.5f;
-    DrawCircleV({s.x + rad, s.y + rad}, rad, COL_BG);
-    DrawCircleLines((int)(s.x + rad), (int)(s.y + rad), rad, lit ? COL_TEXT : COL_EDGE);
-
-    const float cx = s.x + s.width * 0.5f;
-    const float cy = s.y + s.height * 0.5f;
-    const float u  = s.width * 0.24f;
-    const Color ink = lit ? COL_TEXT : COL_EDGE;
-
-    if (icon == ICON_SOUND)
-    {
-        DrawRectangleRec({ cx - u * 1.30f, cy - u * 0.55f, u * 0.75f, u * 1.10f }, ink);
-        DrawTriangle({ cx - u * 0.60f, cy - u * 1.25f },
-                     { cx - u * 0.60f, cy + u * 1.25f },
-                     { cx + u * 0.45f, cy }, ink);
-        if (sound::IsMuted())
-        {
-            DrawLine(cx + u * 0.30f, cy - u * 1.00f, cx + u * 1.45f, cy + u * 1.00f, ink);
-            DrawLine(cx + u * 1.45f, cy - u * 1.00f, cx + u * 0.30f, cy + u * 1.00f, ink);
-        }
-        else
-        {
-            DrawCircleLines((int)(cx + u * 0.95f), (int)cy, u * 0.80f, ColorAlpha(ink, 0.75f));
-            DrawCircleLines((int)(cx + u * 0.95f), (int)cy, u * 1.35f, ColorAlpha(ink, 0.45f));
-        }
-    }
-    else
-    {
-        const float halfW = u * 1.55f;
-        const float rows[3] = { cy - u * 0.95f, cy, cy + u * 0.95f };
-        const float knob[3] = { -0.55f, 0.45f, -0.15f };
-        for (int i = 0; i < 3; i++)
-        {
-            DrawLine(cx - halfW, rows[i], cx + halfW, rows[i], ink);
-            DrawCircle((int)(cx + halfW * knob[i]), (int)rows[i], u * 0.42f, ink);
-        }
-    }
+    DrawSpaced(g.font, label, box.x, box.y, size, spacing,
+               lit ? HOVER_TEXT : idleColor);
+    if (focused && g_focusArmed)
+        DrawRectangleRec({ box.x, box.y + size * 1.18f, box.width, 1.0f },
+                         ColorAlpha(HOVER_TEXT, 0.9f));
 
     if (fired)
     {
@@ -533,36 +511,138 @@ bool UiIconButton(Game& g, Rectangle box, int icon)
     return fired;
 }
 
-void DrawHudIcons(Game& g)
+void DrawHudControls(Game& g)
 {
     const Layout& l = CurrentLayout();
     g_buttons = 0;
     g_focusDelta = 0;
 
-    const float sz  = std::clamp(l.hintSize * 2.6f, 20.0f, 32.0f);
-    const float pad = sz * 0.4f;
-    const float y   = l.margin * 0.25f;
+    const float size    = l.hintSize;
+    const float spacing = l.hintSpacing;
+    const float y       = l.margin * 0.5f;
 
-    const Rectangle settingsBox = { l.screenW - l.margin - sz, y, sz, sz };
-    const Rectangle soundBox    = { settingsBox.x - sz - pad, y, sz, sz };
+    const float remaining = std::max(0.0f, PASSAGE_TIME_LIMIT - g.stageTime);
+    char timer[32];
+    std::snprintf(timer, sizeof(timer), "time %.1fs", remaining);
+    const Color timerColor = remaining <= 5.0f ? HOVER_TEXT : COL_TEXT;
+    DrawSpaced(g.font, timer, l.margin, y, size, spacing, timerColor);
 
-    if (UiIconButton(g, soundBox, ICON_SOUND))
+    const char* soundLabel = g.settings.muted ? "sounds off" : "sounds";
+    const char* setLabel   = "settings";
+    const char* helpLabel  = "help";
+
+    const float soundW = SpacedTextWidth(g.font, soundLabel, size, spacing);
+    const float setW   = SpacedTextWidth(g.font, setLabel,   size, spacing);
+    const float helpW  = SpacedTextWidth(g.font, helpLabel,  size, spacing);
+
+    const Rectangle settingsBox =
+    {
+        l.screenW - l.margin - setW,
+        y,
+        setW,
+        size
+    };
+    const Rectangle soundBox =
+    {
+        settingsBox.x - size * 1.6f - soundW,
+        y,
+        soundW,
+        size
+    };
+    const Rectangle helpBox =
+    {
+        soundBox.x - size * 1.6f - helpW,
+        y,
+        helpW,
+        size
+    };
+
+    if (UiTextControl(g, helpBox, helpLabel, size, spacing))
+    {
+        g.returnScreen = SCREEN_PLAYING;
+        g.helpPage = 0;
+        g.focus = 1;
+        g.helpInputLock = true;
+        GoToScreen(g, SCREEN_HELP);
+    }
+
+    if (UiTextControl(g, soundBox, soundLabel, size, spacing,
+                      g.settings.muted ? HOVER_TEXT : COL_TEXT))
     {
         g.settings.muted = !g.settings.muted;
         sound::SetMuted(g.settings.muted);
     }
 
-    if (UiIconButton(g, settingsBox, ICON_SETTINGS))
+    if (UiTextControl(g, settingsBox, setLabel, size, spacing))
     {
         g.returnScreen = SCREEN_PLAYING;
         GoToScreen(g, SCREEN_SETTINGS);
     }
+
+    if (g_buttons > 0)
+    {
+        if (g_focusDelta != 0) g_focusArmed = true;
+        g.focus = std::clamp(g.focus + g_focusDelta, 0, g_buttons - 1);
+        if (g.focus == 0 && g_focusDelta < 0) g.focus = g_buttons - 1;
+    }
+}
+
+void DrawHelp(Game& g)
+{
+    const Layout& l = CurrentLayout();
+    static const char* const pages[] =
+    {
+        "Guide the ball through the passages.",
+        "Domino halves show the pips they accept.",
+        "Match one half; your pip changes to its partner.",
+        "A wrong pip bounces back and costs two seconds.",
+        "R restarts this passage. Escape pauses."
+    };
+    constexpr int PAGE_COUNT = sizeof(pages) / sizeof(pages[0]);
+
+    DrawRectangle(0, 0, (int)l.screenW, (int)l.screenH, ColorAlpha(COL_BG_DEEP, 225));
+    const float cx = l.screenW * 0.5f;
+    const float titleSize = std::clamp(l.screenH * 0.08f, 32.0f, 52.0f);
+    Heading(g, "Help", cx, l.screenH * 0.30f, titleSize, 5.0f, COL_TEXT);
+
+    char progress[32];
+    std::snprintf(progress, sizeof(progress), "%d / %d", g.helpPage + 1, PAGE_COUNT);
+    Label(g, progress, cx, l.screenH * 0.42f, l.hintSize, l.hintSpacing, COL_TEXT_FAINT);
+    Label(g, pages[g.helpPage], cx, l.screenH * 0.48f, l.storySize, l.storySpacing, COL_TEXT);
+
+    if (g.helpPage == 0)
+        Label(g, "wasd / arrows", cx, l.screenH * 0.55f, l.storySize, l.storySpacing,
+              HOVER_TEXT);
+    else if (g.helpPage == 2)
+        Label(g, "1  >  [ 0 | 1 ]  >  0", cx, l.screenH * 0.55f, l.storySize,
+              l.storySpacing, HOVER_TEXT);
+
+    const char* prompt = g.helpPage == 0 ? "press a direction" :
+                         g.helpPage == 4 ? "press r or resume" : "press enter to continue";
+    Label(g, prompt, cx, l.screenH * 0.59f, l.hintSize, l.hintSpacing, COL_TEXT_FAINT);
+
+    if (g.helpInputLock) return;
+
+    const float buttonW = std::clamp(l.screenW * 0.15f, 110.0f, 190.0f);
+    const float buttonH = std::clamp(l.screenH * 0.065f, 42.0f, 58.0f);
+    const float gap = l.margin;
+    const float y = l.screenH * 0.63f;
+    const float totalW = buttonW * 3.0f + gap * 2.0f;
+    const float left = (l.screenW - totalW) * 0.5f;
+
+    if (UiButton(g, { left, y, buttonW, buttonH }, "Back"))
+        g.helpPage = (g.helpPage + PAGE_COUNT - 1) % PAGE_COUNT;
+    if (UiButton(g, { left + buttonW + gap, y, buttonW, buttonH }, "Next"))
+        g.helpPage = (g.helpPage + 1) % PAGE_COUNT;
+    if (UiButton(g, { left + (buttonW + gap) * 2.0f, y, buttonW, buttonH }, "Resume"))
+        GoToScreen(g, g.returnScreen);
 }
 
 void DrawScreenUi(Game& g)
 {
     g_buttons = 0;
     g_focusDelta = 0;
+    g_focusArmed = false;
 
     switch (g.screen)
     {
@@ -570,6 +650,7 @@ void DrawScreenUi(Game& g)
         case SCREEN_PAUSE:    DrawPause(g);    break;
         case SCREEN_SETTINGS: DrawSettings(g); break;
         case SCREEN_CREDITS:  DrawCredits(g);  break;
+        case SCREEN_HELP:     DrawHelp(g);     break;
         default: break;
     }
 

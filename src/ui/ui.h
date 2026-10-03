@@ -27,7 +27,7 @@ void LoadFonts(Game& g);
 void UnloadFonts(Game& g);
 void LoadBackground(Game& g);
 void UnloadBackground(Game& g);
-void DrawHudIcons(Game& g);
+void DrawHudControls(Game& g);
 void StyleUi();
 
 void DrawScreenUi(Game& g);
@@ -37,6 +37,8 @@ void DrawSettings(Game& g);
 void DrawCredits(Game& g);
 
 bool UiButton(Game& g, Rectangle box, const char* label);
+bool UiTextControl(Game& g, Rectangle box, const char* label, float size, float spacing,
+                   Color idleColor = COL_TEXT_FAINT);
 bool DrawClickableLink(Game& g, const char* text, float x, float y, float size,
                        bool underlined);
 

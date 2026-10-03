@@ -22,7 +22,6 @@ endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 option(IFG_BUILD_TESTS    "Build the headless smoke test"   ON)
-option(IFG_BUILD_CAPTURE  "Build the screenshot tool"       OFF)
 option(IFG_WERROR         "Treat warnings as errors"        OFF)
 
 # Credits metadata. IFG_ITCH_URL is empty on purpose: the game will not invent a link, and
@@ -68,9 +67,9 @@ add_library(raygui INTERFACE)
 target_include_directories(raygui INTERFACE "${RAYGUI_DIR}/src")
 target_compile_definitions(raygui INTERFACE SUPPORT_MODULE_RTEXTURES)
 add_compile_definitions(SUPPORT_MODULE_RAAC)
-set_property(TARGET raylib raygui ifg_core PROPERTY INTERFACE_COMPILE_DEFINITIONS SUPPORT_MODULE_RAAC)
 
 add_library(ifg_core STATIC ${IFG_SOURCES})
+set_property(TARGET raylib raygui ifg_core PROPERTY INTERFACE_COMPILE_DEFINITIONS SUPPORT_MODULE_RAAC)
 target_include_directories(ifg_core PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/game"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui"
@@ -151,12 +150,4 @@ if(IFG_BUILD_TESTS AND NOT EMSCRIPTEN)
     add_test(NAME smoke COMMAND smoke_test)
     set_tests_properties(smoke PROPERTIES
         ENVIRONMENT "SAVE_DIR=${CMAKE_BINARY_DIR}/test-save")
-endif()
-
-if(IFG_BUILD_CAPTURE AND NOT EMSCRIPTEN)
-    add_executable(capture tools/capture.cpp)
-    target_link_libraries(capture PRIVATE ifg_core)
-    target_compile_definitions(capture PRIVATE
-        OUTPUT_DIR="${CMAKE_BINARY_DIR}/shots")
-    set_target_properties(capture PROPERTIES OUTPUT_NAME "capture")
 endif()

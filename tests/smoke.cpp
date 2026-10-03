@@ -42,6 +42,8 @@ bool IsMouseButtonPressed(int) { return false; }
 namespace witness { namespace sound {
 void Init() {}
 void Update(float) {}
+void FadeIn() {}
+void FadeOut() {}
 void SetMasterVolume(float) {}
 void NotifyUserGesture() {}
 void Pop() {}
@@ -67,23 +69,40 @@ void Step(Game& g, int frames)
     for (int i = 0; i < frames; i++) UpdateGame(g, STEP);
 }
 
+// Dash straight at a tile from whichever side has room for a run-up. The board now starts
+// near the left edge, so a fixed 200px approach would spawn the ball outside the world.
 void DashAt(Game& g, int tileIndex)
 {
     const Rectangle r = TileRect(g.board.tiles[tileIndex]);
 
-    g.ball.pos    = { r.x - 200.0f, r.y + r.height * 0.5f };
+    const float runup = 60.0f;
+    const bool fromLeft = (r.x - runup) > 30.0f;
+
+    g.ball.pos    = fromLeft ? Vector2{ r.x - runup, r.y + r.height * 0.5f }
+                             : Vector2{ r.x + r.width + runup, r.y + r.height * 0.5f };
     g.ball.vel    = { 0.0f, 0.0f };
     g.ball.lost   = false;
     g.ball.squash = 0.0f;
+    g.ball.squashVel = 0.0f;
 
     g_keys.w = g_keys.s = false;
-    g_keys.a = false;
-    g_keys.d = true;
+    g_keys.a = !fromLeft;
+    g_keys.d = fromLeft;
 
     Step(g, 90);
 
+    g_keys.a = false;
     g_keys.d = false;
     Step(g, 45);
+}
+
+void HitDominoOnce(Game& g, int tileIndex, int pipValue)
+{
+    const Rectangle tile = TileRect(g.board.tiles[tileIndex]);
+    g.ball.pipValue = pipValue;
+    g.ball.pos = { tile.x - BALL_RADIUS - 0.5f, tile.y + tile.height * 0.5f };
+    g.ball.vel = { BALL_MAX_SPEED, 0.0f };
+    UpdateBall(g, STEP);
 }
 
 struct WindowSize { float w, h; };
@@ -99,26 +118,76 @@ void CheckLayout(const WindowSize& win)
           l.viewX + l.viewW <= l.screenW + 0.5f &&
           l.viewY + l.viewH <= l.screenH + 0.5f, label);
 
-    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the top hint above the board",
-                  win.w, win.h);
-    Check(l.topRowY + l.hintSize <= l.viewY + 0.5f, label);
+    // The HUD is drawn in screen pixels against the window edges while the board lives in
+    // design units, so the playfield rectangle has to land between the two HUD bands.
+    const float playT = l.viewY + PLAY_Y * l.scale;
+    const float playB = l.viewY + (PLAY_Y + PLAY_H) * l.scale;
+    const float playL = l.viewX + PLAY_X * l.scale;
+    const float playR = l.viewX + (PLAY_X + PLAY_W) * l.scale;
 
-    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the control rows below the board",
-                  win.w, win.h);
-    Check(l.viewY + l.viewH <= l.controlRow2Y + 0.5f, label);
+    // The keycap rows are taller than the glyphs: MeasureTextEx reports the font size as the
+    // line height, and the caps pad it on both sides.
+    const float capPad = l.hintSize * 0.28f;
+    const float capTop = l.controlRow2Y - capPad;
 
-    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the story line inside the top band",
+    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the playfield inside the window",
+                  win.w, win.h);
+    Check(playL >= -0.5f && playT >= -0.5f &&
+          playR <= l.screenW + 0.5f && playB <= l.screenH + 0.5f, label);
+
+    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the top HUD above the board",
+                  win.w, win.h);
+    Check(l.storyY + l.storySize <= playT + 0.5f &&
+          l.topRowY + l.hintSize <= playT + 0.5f, label);
+
+    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the key rows below the board",
+                  win.w, win.h);
+    Check(playB <= capTop + 0.5f, label);
+
+    std::snprintf(label, sizeof(label), "layout %.0fx%.0f stacks the story line above the top row",
                   win.w, win.h);
     Check(l.storyY >= 0.0f && l.storyY + l.storySize <= l.topRowY + 0.5f, label);
 
-    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the controls inside the bottom band",
+    std::snprintf(label, sizeof(label), "layout %.0fx%.0f keeps the key rows on screen and apart",
                   win.w, win.h);
-    Check(l.controlRowY + l.hintSize <= l.screenH + 0.5f &&
-          l.controlRowY > l.controlRow2Y, label);
+    Check(l.controlRowY - capPad > l.controlRow2Y - capPad &&
+          l.controlRowY + capPad <= l.screenH + 0.5f, label);
 
     std::snprintf(label, sizeof(label), "layout %.0fx%.0f never degenerates to a zero scale",
                   win.w, win.h);
     Check(l.scale > 0.05f, label);
+}
+
+bool Overlaps(Rectangle a, Rectangle b)
+{
+    return a.x < b.x + b.width && b.x < a.x + a.width &&
+           a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+void CheckBoard(const Board& b)
+{
+    bool overlap = false;
+    bool outside = false;
+
+    for (int i = 0; i < MAX_TILES; i++)
+    {
+        const Rectangle a = TileRect(b.tiles[i]);
+        if (a.x < PLAY_X || a.y < PLAY_Y ||
+            a.x + a.width > PLAY_X + PLAY_W || a.y + a.height > PLAY_Y + PLAY_H) outside = true;
+
+        for (int j = i + 1; j < MAX_TILES; j++)
+            if (Overlaps(a, TileRect(b.tiles[j]))) overlap = true;
+    }
+
+    Check(!overlap, "no two dominoes overlap");
+    Check(!outside, "every domino sits inside the playfield");
+
+    const Rectangle spawn = { BALL_START.x - BALL_RADIUS, BALL_START.y - BALL_RADIUS,
+                              BALL_RADIUS * 2.0f, BALL_RADIUS * 2.0f };
+    bool spawnClear = true;
+    for (int i = 0; i < MAX_TILES; i++)
+        if (Overlaps(spawn, TileRect(b.tiles[i]))) spawnClear = false;
+    Check(spawnClear, "the starting position is clear of the dominoes");
 }
 
 int TotalPips(const Game& g)
@@ -140,6 +209,16 @@ int main()
 
     GoToScreen(g, SCREEN_PLAYING);
 
+        Game timed;
+        InitBoard(timed.board);
+        ResetBall(timed);
+        GoToScreen(timed, SCREEN_PLAYING);
+        timed.stageTime = PASSAGE_TIME_LIMIT - STEP * 0.5f;
+        UpdateGame(timed, STEP);
+        Check(timed.stageTime == 0.0f && timed.attempt == 1,
+            "the 20-second passage limit resets the attempt");
+        Check(timed.story.line == "Time's Up.", "a timed-out attempt reports the timeout");
+
     int intact = 0, keystones = 0, pips = 0;
     for (int i = 0; i < MAX_TILES; i++)
     {
@@ -152,6 +231,42 @@ int main()
     Check(keystones > 0, "board contains faster-to-break keystones");
     Check(pips > 40, "board starts with a meaningful amount of pips");
     std::printf("  (%d tiles, %d keystones, %d pips)\n", intact, keystones, pips);
+
+    CheckBoard(g.board);
+
+        Game helpPause;
+        InitBoard(helpPause.board);
+        ResetBall(helpPause);
+        GoToScreen(helpPause, SCREEN_PLAYING);
+        helpPause.stageTime = 4.0f;
+        const Vector2 helpBallPos = helpPause.ball.pos;
+        const float helpClock = helpPause.clock;
+        GoToScreen(helpPause, SCREEN_HELP);
+        UpdateGame(helpPause, 1.0f);
+        Check(helpPause.stageTime == 4.0f && helpPause.clock == helpClock &&
+            helpPause.ball.pos.x == helpBallPos.x && helpPause.ball.pos.y == helpBallPos.y,
+            "opening help pauses the game clock and ball");
+
+        Game pipChain;
+        InitBoard(pipChain.board);
+        ResetBall(pipChain);
+        Check(pipChain.ball.pipValue == 1, "the player starts with pip value one");
+        HitDominoOnce(pipChain, 1, 1);
+        Check(pipChain.ball.pipValue == 0 && pipChain.board.tiles[1].consumedB &&
+            !pipChain.board.tiles[1].consumedA,
+            "a matching pip consumes its half and adopts the opposite value");
+
+        const int remainingHalfPips = pipChain.board.tiles[1].pipsLeft;
+        UpdateBoard(pipChain, HIT_COOLDOWN);
+        HitDominoOnce(pipChain, 1, 1);
+        Check(pipChain.board.tiles[1].pipsLeft == remainingHalfPips &&
+            pipChain.ball.pipValue == 1,
+            "a consumed half cannot activate again");
+
+        UpdateBoard(pipChain, HIT_COOLDOWN);
+        HitDominoOnce(pipChain, 1, 0);
+        Check(pipChain.board.tiles[1].gone && pipChain.board.tiles[1].consumedA,
+            "the remaining matching half completes the domino");
 
     const Vector2 start = g.ball.pos;
     g_keys.d = true;
@@ -184,6 +299,19 @@ int main()
     Check(TotalPips(g) < pipsBefore, "hard collisions strip pips from tiles");
 
     const int heavy = 0;
+        const float timeBeforeMismatch = g.stageTime;
+        const int pipsBeforeMismatch = g.board.tiles[heavy].pipsLeft;
+        const Rectangle heavyRect = TileRect(g.board.tiles[heavy]);
+        g.ball.pipValue = 1;
+        g.ball.pos = { heavyRect.x - BALL_RADIUS - 0.5f, heavyRect.y + heavyRect.height * 0.5f };
+        g.ball.vel = { BALL_MAX_SPEED, 0.0f };
+        UpdateBall(g, STEP);
+        Check(g.board.tiles[heavy].pipsLeft == pipsBeforeMismatch,
+            "a mismatched collision leaves both domino halves intact");
+        Check(g.stageTime >= timeBeforeMismatch + 2.0f,
+            "a mismatched collision applies the timer penalty");
+
+        g.ball.pipValue = 6;
     int runs = 0;
     while (!g.board.tiles[heavy].gone && runs < 12)
     {

@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/src/game",
+                "${workspaceFolder}/src/ui",
+                "${workspaceFolder}/src/sound",
+                "${workspaceFolder}/src/input",
+                "${workspaceFolder}/src/platform",
+                "${workspaceFolder}/external/raylib/src",
+                "${workspaceFolder}/external/raygui/src"
+            ],
+            "defines": [
+                "SUPPORT_MODULE_RAAC",
+                "IFG_AUTHOR=\"kirbx01\"",
+                "IFG_ITCH_URL=\"\""
+            ],
+            "compileCommands": "${workspaceFolder}/build-linux/compile_commands.json",
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

@@ -15,14 +15,15 @@ inline float   VDot(Vector2 a, Vector2 b) { return a.x * b.x + a.y * b.y; }
 inline float   VLen(Vector2 a)           { return std::sqrt(a.x * a.x + a.y * a.y); }
 
 constexpr int SCREEN_W   = 1280;
-constexpr int SCREEN_H   = 680;
+constexpr int SCREEN_H   = 720;
 constexpr int TARGET_FPS = 60;
+constexpr float PASSAGE_TIME_LIMIT = 20.0f;
 
 constexpr int DESIGN_W = SCREEN_W;
 constexpr int DESIGN_H = SCREEN_H;
 
 constexpr int TITLE_FONT_SIZE = 96;
-constexpr int UI_FONT_SIZE    = 44;
+constexpr int UI_FONT_SIZE    = 48;
 
 constexpr const char* GAME_TITLE = "i forgor";
 
@@ -71,20 +72,25 @@ inline constexpr const char* FONT_BODY_PATHS[] =
 
 constexpr int STAGE_COUNT = 5;
 
-constexpr float DOOR_X = 1150.0f;
-constexpr float DOOR_Y =  84.0f;
-constexpr float DOOR_W =  60.0f;
-constexpr float DOOR_H = 108.0f;
+constexpr float DOOR_X = 1136.0f;
+constexpr float DOOR_Y =  96.0f;
+constexpr float DOOR_W =  70.0f;
+constexpr float DOOR_H = 128.0f;
+
+// The HUD is drawn in screen pixels against the window edges, so the design surface reserves
+// these margins and the playfield stays inside them. On windows too small to give both the
+// layout gives up scale instead of letting them collide.
+constexpr float PLAY_X =  70.0f;
+constexpr float PLAY_Y =  80.0f;
+constexpr float PLAY_W = 1140.0f;
+constexpr float PLAY_H = 568.0f;
 
 constexpr float BALL_RADIUS      = 12.0f;
 constexpr float BALL_ACCEL       = 1500.0f;
 constexpr float BALL_MAX_SPEED   = 430.0f;
 constexpr float BALL_DRAG        = 3.0f;
-constexpr float BALL_RESTITUTION = 0.45f;
+constexpr float BALL_RESTITUTION = 0.80f;
 constexpr float EROSION_SPEED    = 190.0f;
-constexpr float PIPS_PER_HIT     = 2;
-constexpr float PIPS_BONUS_HIT   = 1;
-constexpr float PIPS_BONUS_SPEED = 360.0f;
 constexpr float HIT_COOLDOWN     = 0.16f;
 
 constexpr float BALL_SQUASH_STIFFNESS = 150.0f;
@@ -111,11 +117,18 @@ enum Screen
     SCREEN_SETTINGS,
     SCREEN_CLEAR,
     SCREEN_ENDING,
-    SCREEN_CREDITS
+    SCREEN_CREDITS,
+    SCREEN_HELP
 };
 
 constexpr int MAX_TILES = 16;
-constexpr float CORNER_R = 7.0f;
+
+// A domino is a real rounded rectangle, twice as long as it is wide. DOMINO_CORNER is measured
+// in screen pixels and divided by the layout scale so the outline never thickens when zoomed.
+constexpr float TILE_LONG     = 100.0f;
+constexpr float TILE_SHORT    =  48.0f;
+constexpr float DOMINO_CORNER =  3.0f;
+constexpr float CORNER_R      =  7.0f;
 
 struct Domino
 {
@@ -123,6 +136,8 @@ struct Domino
     bool    horizontal = false;
     int     valueA   = 0;
     int     valueB   = 0;
+    bool    consumedA = false;
+    bool    consumedB = false;
     int     pipsLeft = 0;
     bool    gone     = false;
     bool    keystone = false;
@@ -149,6 +164,7 @@ struct Ball
     float   squash    = 0.0f;
     float   squashVel = 0.0f;
     float   impactAngle = 0.0f;
+    int     pipValue  = 1;
     bool    lost      = false;
     float   lostTimer = 0.0f;
 };
@@ -255,6 +271,8 @@ struct Game
     bool  edgeHintShown = false;
     bool  hasSave   = false;
     bool  quitToMenu = false;
+    bool  helpInputLock = false;
+    int   helpPage = 0;
 
     int focus = 0;
 

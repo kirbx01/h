@@ -27,6 +27,7 @@ char  g_popPath[256]   = { 0 };
 float g_volume = 1.0f;
 bool  g_muted = false;
 float g_fade   = 0.0f;
+float g_fadeTarget = 1.0f;
 
 bool TryOpen(Music& out, char* log, const char* const* stems, std::size_t count,
              const char* override)
@@ -94,6 +95,7 @@ void Init()
 
     if (TryOpen(g_music, g_musicPath, AUDIO_STEMS, AUDIO_STEM_COUNT, std::getenv("IFG_AUDIO")))
     {
+        g_music.looping = true;
         PlayMusicStream(g_music);
         TraceLog(LOG_WARNING, "i forgor: music '%s'", g_musicPath);
     }
@@ -110,16 +112,24 @@ void Update(float dt)
 {
     if (!g_device) return;
 
-    if (g_fade < 1.0f)
-    {
-        g_fade = FADE_IN > 0.0f ? std::min(1.0f, g_fade + dt / FADE_IN) : 1.0f;
-    }
+    if (g_fade < g_fadeTarget)
+        g_fade = FADE_IN > 0.0f ? std::min(g_fadeTarget, g_fade + dt / FADE_IN) : g_fadeTarget;
+    else if (g_fade > g_fadeTarget)
+        g_fade = FADE_OUT > 0.0f ? std::max(g_fadeTarget, g_fade - dt / FADE_OUT) : g_fadeTarget;
 
     const float vol   = g_muted ? 0.0f : std::clamp(g_volume, 0.0f, 1.0f);
     const float level = vol * g_fade;
-    if (IsMusicValid(g_music)) SetMusicVolume(g_music, level);
+    if (IsMusicValid(g_music))
+    {
+        UpdateMusicStream(g_music);
+        SetMusicVolume(g_music, level);
+    }
     if (IsSoundValid(g_pop))   SetSoundVolume(g_pop, POP_GAIN * vol);
 }
+
+void FadeIn() { g_fadeTarget = 1.0f; }
+
+void FadeOut() { g_fadeTarget = 0.0f; }
 
 void SetMasterVolume(float v) { g_volume = v; }
 
@@ -146,7 +156,7 @@ void Shutdown()
 
     if (IsMusicValid(g_music) && IsMusicStreamPlaying(g_music))
     {
-        const float start = std::clamp(g_volume, 0.0f, 1.0f);
+        const float start = std::clamp(g_volume * g_fade, 0.0f, 1.0f);
         for (int i = 0; i < 30; i++)
         {
             const float k = 1.0f - (float)i / 30.0f;

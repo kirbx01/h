@@ -49,6 +49,7 @@ void GoToScreen(Game& g, Screen screen)
     if (g.screen == screen) return;
     g.screen     = screen;
     g.sceneTime  = 0.0f;
+    if (screen == SCREEN_MENU || screen == SCREEN_PLAYING) sound::FadeIn();
 }
 
 void RequestTransition(Game& g, Screen screen, float speed)
@@ -81,6 +82,7 @@ void StartNewGame(Game& g)
     g.attempt   = 0;
     g.finished  = false;
     g.hasSave   = false;
+    g.ball.pipValue = 1;
 
     ClearSession();
 
@@ -161,6 +163,7 @@ void BeginEnding(Game& g)
 {
     g.trail.Clear();
     g.finished = true;
+    sound::FadeOut();
 
     SaveSession(g);
 
@@ -179,35 +182,43 @@ Layout ComputeLayoutFor(float screenW, float screenH)
     l.screenH = std::max(1.0f, screenH);
 
     const float shortEdge = std::min(l.screenW, l.screenH);
-    l.margin = std::clamp(shortEdge * 0.022f, 12.0f, 34.0f);
-    l.hintSize = std::clamp(shortEdge * 0.0205f, 12.0f, 19.0f);
+    l.margin    = std::clamp(shortEdge * 0.0220f,  8.0f, 34.0f);
+    l.hintSize  = 16.0f;
     l.hintSpacing = l.hintSize * 0.16f;
-    l.storySize = std::clamp(shortEdge * 0.0265f, 16.0f, 26.0f);
+    l.storySize = 18.0f;
     l.storySpacing = l.storySize * 0.20f;
 
     l.storyY   = l.margin * 0.5f + l.storySize * 0.85f;
     l.topRowY  = l.storyY + l.storySize * 1.45f;
 
-    const float topBand = l.topRowY + l.hintSize * 1.6f;
-    const float bottomBand = l.margin + l.hintSize * 3.2f;
+    l.controlRow2Y = l.screenH - l.margin - l.hintSize * 3.0f;
+    l.controlRowY  = l.screenH - l.margin - l.hintSize * 1.1f;
 
-    const float availW = l.screenW - l.margin * 2.0f;
-    const float availH = l.screenH - topBand - bottomBand;
-    l.scale = std::max(0.05f, std::min(availW / (float)DESIGN_W, availH / (float)DESIGN_H));
+    // Screen-space bands the HUD occupies. The world view is a centred letterbox fit of the
+    // design surface, which is 1:1 at the design size; if the window is too small for the
+    // bands as well, the view shrinks and anchors the playfield between them instead of
+    // letting the HUD sit on top of the board.
+    const float bandTop = l.topRowY + l.hintSize + l.margin * 0.35f;
+    const float bandBot = l.screenH - l.margin - l.hintSize * 3.4f;
+
+    const float fit    = std::min(l.screenW / (float)DESIGN_W, l.screenH / (float)DESIGN_H);
+    const float byBand = std::max(1.0f, bandBot - bandTop) / PLAY_H;
+
+    l.scale = std::max(0.05f, std::min(fit, byBand));
 
     l.viewW = (float)DESIGN_W * l.scale;
     l.viewH = (float)DESIGN_H * l.scale;
     l.viewX = (l.screenW - l.viewW) * 0.5f;
-    l.viewY = topBand + (availH - l.viewH) * 0.5f;
-
-    l.controlRow2Y = l.screenH - bottomBand + l.hintSize * 0.35f;
-    l.controlRowY = l.screenH - bottomBand + l.hintSize * 1.85f;
+    l.viewY = (l.scale < fit) ? std::max(0.0f, bandTop - PLAY_Y * l.scale)
+                              : (l.screenH - l.viewH) * 0.5f;
 
     return l;
 }
 
 void UpdateGame(Game& g, float dt)
 {
+    if (g.screen == SCREEN_HELP) return;
+
     g.clock    += dt;
     g.sceneTime += dt;
 
@@ -245,10 +256,16 @@ void UpdateGame(Game& g, float dt)
 
         case SCREEN_PLAYING:
         {
-            g.stageTime += dt;
-
             if (!g.transition.active)
             {
+                g.stageTime += dt;
+                if (g.stageTime >= PASSAGE_TIME_LIMIT)
+                {
+                    RestartAttempt(g, false);
+                    g.story.Say("Time's Up.", 2.4f);
+                    break;
+                }
+
                 UpdateBall(g, dt);
                 UpdateTrail(g, dt);
 

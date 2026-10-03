@@ -21,7 +21,6 @@ NAME="i_forgor"
 cmake -S . -B "$BUILD_DIR" \
       -DCMAKE_BUILD_TYPE=Release \
       -DIFG_BUILD_TESTS=ON \
-      -DIFG_BUILD_CAPTURE=OFF \
       ${IFG_ITCH_URL:+-DIFG_ITCH_URL="$IFG_ITCH_URL"}
 
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
@@ -48,7 +47,13 @@ cp README.md "$DIST_DIR/" 2>/dev/null || true
 
 tar -czf "${DIST_DIR}.tar.gz" -C "$(dirname "$DIST_DIR")" "$(basename "$DIST_DIR")"
 
+# itch.io takes a zip just as happily as a tarball, and a zip is the one archive every
+# platform target shares, so one is written next to it. The folder's contents go in, not
+# the folder, so the executable lands at the root of the archive where itch expects it.
+( cd "$DIST_DIR" && zip -q -r -9 "../$(basename "$DIST_DIR").zip" . )
+
 echo
 echo "built ${DIST_DIR}"
 echo "packed ${DIST_DIR}.tar.gz"
-du -h "${DIST_DIR}.tar.gz"
+echo "packed ${DIST_DIR}.zip   <- this is the file to upload to itch.io (Linux)"
+du -h "${DIST_DIR}.tar.gz" "${DIST_DIR}.zip"

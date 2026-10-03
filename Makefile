@@ -71,15 +71,10 @@ TEST_OBJECTS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_TEST)/%.o,$(TEST_SOURCES)) \
                 $(patsubst tests/%.cpp,$(BUILD_TEST)/tests/%.o,$(wildcard tests/*.cpp))
 TEST_TARGET  := $(BUILD_TEST)/smoke_test
 
-# Capture tool: same sources as the game plus tools/capture.cpp, so the PNGs it writes
-# show the real renderer.
-BUILD_CAPTURE ?= build-capture
-CAPTURE_TARGET := $(BUILD_CAPTURE)/capture
-
 # Set SAVE_DIR=/tmp/ifg to keep the session file out of your real profile while testing:
 #   SAVE_DIR=/tmp/ifg make run
 
-.PHONY: all run clean deps raylib test capture
+.PHONY: all run clean deps raylib test
 
 all: $(TARGET)
 
@@ -125,26 +120,12 @@ $(BUILD_TEST)/tests/%.o: tests/%.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-capture: $(CAPTURE_TARGET)
-	@mkdir -p $(BUILD_CAPTURE)
-	./$(CAPTURE_TARGET)
-
-# main.o is replaced by the tool's own main, so it is left out of the link.
-CAPTURE_OBJECTS := $(filter-out $(BUILD)/main.o,$(OBJECTS))
-
-$(CAPTURE_TARGET): $(CAPTURE_OBJECTS) $(BUILD_CAPTURE)/capture.o $(RAYLIB_DEP)
-	$(CXX) $(BUILD_CAPTURE)/capture.o $(CAPTURE_OBJECTS) -o $@ $(LDFLAGS) $(LDLIBS)
-
-$(BUILD_CAPTURE)/capture.o: tools/capture.cpp
-	@mkdir -p $(dir $@)
-	$(CXX) $(CXXFLAGS) -DOUTPUT_DIR='"$(CURDIR)/$(BUILD_CAPTURE)"' -c $< -o $@
-
 deps:
 	@echo "CXXFLAGS: $(CXXFLAGS)"
 	@echo "LDFLAGS : $(LDFLAGS)"
 	@echo "SOURCES :"; for s in $(SOURCES); do echo "    $$s"; done
 
 clean:
-	rm -rf $(BUILD) $(BUILD_TEST) $(BUILD_CAPTURE) $(TARGET)
+	rm -rf $(BUILD) $(BUILD_TEST) $(TARGET)
 
--include $(DEPS) $(TEST_OBJECTS:.o=.d) $(CAPTURE_OBJECTS:.o=.d)
+-include $(DEPS) $(TEST_OBJECTS:.o=.d)

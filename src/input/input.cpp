@@ -29,6 +29,34 @@ void HandleInput(Game& g)
             else if (IsKeyPressed(KEY_P))          GoToScreen(g, SCREEN_PAUSE);
             break;
 
+        case SCREEN_HELP:
+            if (g.helpInputLock)
+            {
+                g.helpInputLock = false;
+                break;
+            }
+            if (IsKeyPressed(KEY_ESCAPE))
+                GoToScreen(g, g.returnScreen);
+            else if (g.helpPage == 0 &&
+                     (IsKeyPressed(KEY_A) || IsKeyPressed(KEY_D) || IsKeyPressed(KEY_W) ||
+                      IsKeyPressed(KEY_S) || IsKeyPressed(KEY_UP) || IsKeyPressed(KEY_DOWN) ||
+                      IsKeyPressed(KEY_LEFT) || IsKeyPressed(KEY_RIGHT)))
+            {
+                g.helpPage = 1;
+                g.helpInputLock = true;
+            }
+            else if ((g.helpPage == 1 || g.helpPage == 2 || g.helpPage == 3) &&
+                     g.focus == 1 && confirm)
+            {
+                g.helpPage++;
+                g.helpInputLock = true;
+            }
+            else if (g.helpPage == 4 && IsKeyPressed(KEY_R))
+            {
+                GoToScreen(g, g.returnScreen);
+            }
+            break;
+
         case SCREEN_PAUSE:
         case SCREEN_SETTINGS:
         case SCREEN_MENU:

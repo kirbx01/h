@@ -48,7 +48,6 @@ emcmake cmake -S . -B "$BUILD_DIR" \
       -DPLATFORM=Web \
       -DIFG_WEB_ASSET_DIR="$STAGE_DIR" \
       -DIFG_BUILD_TESTS=OFF \
-      -DIFG_BUILD_CAPTURE=OFF \
       ${IFG_ITCH_URL:+-DIFG_ITCH_URL="$IFG_ITCH_URL"}
 
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
@@ -57,16 +56,23 @@ rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
 # The preloaded folder, the page, the code and the data all have to travel together.
-for f in i_forgor.html i_forgor.js i_forgor.wasm i_forgor.data; do
+for f in i_forgor.js i_forgor.wasm i_forgor.data; do
     [ -e "$BUILD_DIR/bin/$f" ] && cp "$BUILD_DIR/bin/$f" "$DIST_DIR/"
 done
 
+# itch.io serves whatever the zip unpacks into, and it looks for index.html at the root, so
+# the page is renamed on the way out. Everything else has to keep the name the .js expects,
+# which is why only the html moves.
+[ -e "$BUILD_DIR/bin/i_forgor.html" ] && cp "$BUILD_DIR/bin/i_forgor.html" "$DIST_DIR/index.html"
+
+# A zip with index.html at the root is exactly what the itch.io HTML5 upload wants.
+( cd "$DIST_DIR" && zip -q -r -9 "../$(basename "$DIST_DIR").zip" . )
+
+echo
+echo "built $DIST_DIR"
+echo "packed ${DIST_DIR}.zip   <- this is the file to upload to itch.io (HTML5)"
+
 # Serve it: emscripten's own server, or anything else that hands out the right types.
 if command -v emrun >/dev/null 2>&1; then
-    echo
-    echo "built $DIST_DIR"
     echo "try it with:  emrun $BUILD_DIR/bin/i_forgor.html"
-else
-    echo
-    echo "built $DIST_DIR"
 fi

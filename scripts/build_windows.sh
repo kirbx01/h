@@ -28,7 +28,6 @@ cmake -S . -B "$BUILD_DIR" \
       -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-x86_64.cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DIFG_BUILD_TESTS=OFF \
-      -DIFG_BUILD_CAPTURE=OFF \
       ${IFG_ITCH_URL:+-DIFG_ITCH_URL="$IFG_ITCH_URL"}
 
 cmake --build "$BUILD_DIR" -j"$(nproc 2>/dev/null || echo 4)"
@@ -61,6 +60,11 @@ file "$DIST_DIR/$NAME" | grep -q "PE32" || {
     exit 1
 }
 
+# The folder is what gets zipped; the contents go in so that i_forgor.exe sits at the root
+# of the archive, which is where itch.io looks for the launch path.
+( cd "$DIST_DIR" && zip -q -r -9 "../$(basename "$DIST_DIR").zip" . )
+
 echo
 echo "built $DIST_DIR/$NAME"
-echo "zip it and hand it over; the folder has to stay together"
+echo "packed ${DIST_DIR}.zip   <- this is the file to upload to itch.io (Windows)"
+echo "the folder has to stay together; assets/ sits next to the exe"

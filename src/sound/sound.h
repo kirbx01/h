@@ -6,6 +6,8 @@ namespace sound {
 
 void Init();
 void Update(float dt);
+void FadeIn();
+void FadeOut();
 void SetMasterVolume(float v);
 void SetMuted(bool m);
 bool IsMuted();

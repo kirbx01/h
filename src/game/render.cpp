@@ -12,6 +12,10 @@ namespace {
 
 Layout g_layout;
 
+// Keycap padding, in multiples of the hint font size.
+constexpr float KEYCAP_PAD_X = 0.42f;
+constexpr float KEYCAP_PAD_Y = 0.28f;
+
 float Smooth(float t)
 {
     t = std::clamp(t, 0.0f, 1.0f);
@@ -84,40 +88,36 @@ void Centered(const Font& font, const char* text, float cx, float y, float size,
                color);
 }
 
-struct Pip { float u, v; };
+// A domino half is laid out on the usual 3x3 pip grid; PIP_CELL indexes that grid as
+// column + 3 * row, so the same table serves both tile orientations.
+constexpr float PIP_GX[3] = { 0.28f, 0.50f, 0.72f };
+constexpr float PIP_GY[3] = { 0.27f, 0.50f, 0.73f };
 
-constexpr Pip PIPS[7] =
+constexpr int PIP_CELL[7][6] =
 {
-    { 0.26f, 0.22f }, { 0.74f, 0.78f }, { 0.74f, 0.22f },
-    { 0.26f, 0.78f }, { 0.24f, 0.50f }, { 0.76f, 0.50f }, { 0.50f, 0.50f }
+    { -1, -1, -1, -1, -1, -1 },
+    {  4, -1, -1, -1, -1, -1 },
+    {  0,  8, -1, -1, -1, -1 },
+    {  0,  4,  8, -1, -1, -1 },
+    {  0,  2,  6,  8, -1, -1 },
+    {  0,  2,  4,  6,  8, -1 },
+    {  0,  2,  3,  5,  6,  8 },
 };
 
-constexpr int PICK[7][6] =
+constexpr int PIP_COUNT[7] = { 0, 1, 2, 3, 4, 5, 6 };
+
+void DrawHalfPips(Rectangle half, int value, Color ink)
 {
-    { 6, 0, 0, 0, 0, 0 },
-    { 0, 1, 0, 0, 0, 0 },
-    { 0, 1, 6, 0, 0, 0 },
-    { 0, 1, 2, 3, 0, 0 },
-    { 0, 1, 6, 2, 3, 0 },
-    { 0, 1, 2, 3, 4, 5 }
-};
+    const int v = std::clamp(value, 0, 6);
+    const float r = std::min(half.width, half.height) * 0.085f;
 
-constexpr int PICK_N[7] = { 1, 2, 3, 4, 5, 6 };
-
-int HalfPips(Rectangle half, bool longIsY, int count, Vector2 out[6])
-{
-    if (count <= 0) return 0;
-    count = count > 6 ? 6 : count;
-
-    const int* src = PICK[count];
-    for (int i = 0; i < PICK_N[count]; i++)
+    for (int i = 0; i < PIP_COUNT[v]; i++)
     {
-        const Pip& p = PIPS[src[i]];
-        const float u = p.u * (longIsY ? half.height : half.width);
-        const float v = p.v * (longIsY ? half.width  : half.height);
-        out[i] = { half.x + (longIsY ? v : u), half.y + (longIsY ? u : v) };
+        const int cell = PIP_CELL[v][i];
+        const float u = PIP_GX[cell % 3];
+        const float w = PIP_GY[cell / 3];
+        DrawCircleV({ half.x + u * half.width, half.y + w * half.height }, r, ink);
     }
-    return PICK_N[count];
 }
 
 void DrawTile(const Domino& d, float alpha)
@@ -136,52 +136,35 @@ void DrawTile(const Domino& d, float alpha)
         return;
     }
 
-    const Color edge = ColorAlpha(COL_TEXT, alpha);
-    const Color fill = ColorAlpha(COL_TEXT, alpha * 0.06f);
+    // DOMINO_CORNER is a screen pixel count, so undo the world scale before handing it to
+    // raylib. Without this the outline thickens on every zoomed window.
+    const float s = std::max(0.05f, CurrentLayout().scale);
+    const float corner = std::min({ DOMINO_CORNER / s, r.width * 0.5f, r.height * 0.5f });
+    const float bar    = std::max(1.0f / s, 1.0f);
 
-    DrawRectangleRounded(r, 4.0f, 4, fill);
-    DrawRectangleRoundedLinesEx(r, 4.0f, 4, 2.0f, edge);
+    const Color edge = ColorAlpha(COL_TEXT, alpha);
+    const Color fill = ColorAlpha(COL_TEXT, alpha * (0.06f + 0.34f * d.hitFlash));
+
+    DrawRectangleRounded(r, corner, 6, fill);
+    DrawRectangleRoundedLinesEx(r, corner, 6, bar, edge);
 
     const bool longIsY = !d.horizontal;
-    Rectangle halfA, halfB;
+    const Rectangle halfA = longIsY ? Rectangle{ r.x, r.y, r.width, r.height * 0.5f }
+                                     : Rectangle{ r.x, r.y, r.width * 0.5f, r.height };
+    const Rectangle halfB = longIsY ? Rectangle{ r.x, r.y + r.height * 0.5f, r.width, r.height * 0.5f }
+                                     : Rectangle{ r.x + r.width * 0.5f, r.y, r.width * 0.5f, r.height };
+
     if (longIsY)
-    {
-        halfA = { r.x, r.y, r.width, r.height * 0.5f };
-        halfB = { r.x, r.y + r.height * 0.5f, r.width, r.height * 0.5f };
-        DrawLine((int)r.x + 4, (int)(r.y + r.height * 0.5f),
-                 (int)(r.x + r.width) - 4, (int)(r.y + r.height * 0.5f), edge);
-    }
+        DrawRectangleRec({ r.x + r.width * 0.30f, r.y + r.height * 0.5f - bar * 0.5f,
+                           r.width * 0.40f, bar }, edge);
     else
-    {
-        halfA = { r.x, r.y, r.width * 0.5f, r.height };
-        halfB = { r.x + r.width * 0.5f, r.y, r.width * 0.5f, r.height };
-        DrawLine((int)(r.x + r.width * 0.5f), (int)r.y + 4,
-                 (int)(r.x + r.width * 0.5f), (int)(r.y + r.height) - 4, edge);
-    }
+        DrawRectangleRec({ r.x + r.width * 0.5f - bar * 0.5f, r.y + r.height * 0.30f,
+                           bar, r.height * 0.40f }, edge);
 
-    const float pad = std::min(halfA.width, halfA.height) * 0.28f;
-    const float dot = std::min(halfA.width, halfA.height) * 0.14f;
-    const Color ink = edge;
-
-    auto drawDots = [&](int val, const Rectangle& h) {
-        Vector2 p[7][7] = {
-            {{h.x + h.width*0.5f, h.y + h.height*0.5f}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + h.height - pad}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}, {h.x + h.width - pad, h.y + h.height - pad}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + h.width*0.5f, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height - pad}},
-            {{h.x + pad, h.y + pad}, {h.x + h.width - pad, h.y + pad}, {h.x + h.width*0.5f, h.y + pad}, {h.x + pad, h.y + h.height - pad}, {h.x + h.width - pad, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height - pad}, {h.x + h.width*0.5f, h.y + h.height*0.5f}}
-        };
-        int n[] = {1,2,3,4,5,6,7};
-        if(val<0) val=0; if(val>6) val=6;
-        int c=n[val];
-        const auto& pts=p[val];
-        for(int i=0;i<c;i++) DrawCircleV(pts[i], dot, ink);
-    };
-    drawDots(d.valueA, halfA);
-    drawDots(d.valueB, halfB);
+    DrawHalfPips(halfA, d.valueA, edge);
+    DrawHalfPips(halfB, d.valueB, edge);
 }
+
 void DrawDoorShape(const Game& g, float alpha)
 {
     if (alpha <= 0.001f) return;
@@ -219,6 +202,42 @@ const Layout& CurrentLayout() { return g_layout; }
 
 constexpr int BLOB_POINTS = 26;
 
+float BlobLobe(float a, float phase)
+{
+    return 1.0f + 0.070f * std::sin(2.0f * a + 0.9f + phase)
+                + 0.042f * std::sin(3.0f * a - 0.4f)
+                + 0.022f * std::sin(5.0f * a + 1.7f);
+}
+
+// raylib turns on GL_CULL_FACE globally, so only front facing triangles survive. The centre
+// vertex therefore comes first and the arc runs backwards through the angles, which is the
+// same winding rlgl's own circle sector uses. Emitting the fan the other way round (or as
+// raw RL_TRIANGLES) culls every wedge and the player disappears completely.
+void BlobFan(float rx, float ry, float phase, Color fill)
+{
+    rlSetTexture(0);
+    rlBegin(RL_QUADS);
+    for (int i = 0; i < BLOB_POINTS; i++)
+    {
+        const float t0 = (float)i / (float)BLOB_POINTS * 2.0f * PI;
+        const float t1 = (float)(i + 1) / (float)BLOB_POINTS * 2.0f * PI;
+        const float l0 = BlobLobe(t0, phase);
+        const float l1 = BlobLobe(t1, phase);
+
+        const float x0 = std::cos(t0) * rx * l0;
+        const float y0 = std::sin(t0) * ry * l0;
+        const float x1 = std::cos(t1) * rx * l1;
+        const float y1 = std::sin(t1) * ry * l1;
+
+        rlColor4ub(fill.r, fill.g, fill.b, fill.a);
+        rlVertex2f(0.0f, 0.0f);
+        rlVertex2f(x1, y1);
+        rlVertex2f(x0, y0);
+        rlVertex2f(x0, y0);
+    }
+    rlEnd();
+}
+
 void DrawBallShape(const Game& g, float alpha)
 {
     if (alpha <= 0.001f) return;
@@ -232,36 +251,24 @@ void DrawBallShape(const Game& g, float alpha)
     const float ry = b.radius * (1.0f - 0.20f * t) * (1.0f + 0.34f * sq);
 
     const float angle = speed > 12.0f ? std::atan2(b.vel.y, b.vel.x) : b.impactAngle;
-    const float wobble = 0.5f + 0.5f * std::sin(g.clock * 1.7f);
+    const float phase = 0.9f + (0.5f + 0.5f * std::sin(g.clock * 1.7f)) * 0.6f;
+
+    // The outline is a screen pixel count too, so it stays crisp instead of growing with zoom.
+    const float ring = std::max(1.0f, 2.0f / std::max(0.05f, CurrentLayout().scale));
 
     rlPushMatrix();
     rlTranslatef(b.pos.x, b.pos.y, 0.0f);
     rlRotatef(angle * 60.0f, 0.0f, 0.0f, 1.0f);
-
-    const Color fill = ColorAlpha(COL_TEXT, alpha);
-    rlBegin(RL_TRIANGLES);
-        rlColor4ub(fill.r, fill.g, fill.b, fill.a);
-        rlVertex2f(0.0f, 0.0f);
-        for (int i = 0; i <= BLOB_POINTS; i++)
-        {
-            const float a = (float)i / (float)BLOB_POINTS * 2.0f * PI;
-            const float lobe = 1.0f
-                             + 0.070f * std::sin(2.0f * a + 0.9f + wobble * 0.6f)
-                             + 0.042f * std::sin(3.0f * a - 0.4f)
-                             + 0.022f * std::sin(5.0f * a + 1.7f);
-            rlVertex2f(std::cos(a) * rx * lobe, std::sin(a) * ry * lobe);
-        }
-    rlEnd();
+        BlobFan(rx + ring, ry + ring, phase, ColorAlpha({   0,   0,   0, 255 }, alpha));
+        BlobFan(rx,          ry,          phase, ColorAlpha({ 255, 255, 255, 255 }, alpha));
     rlPopMatrix();
 }
 
 
 void BeginWorldView(const Layout& l)
 {
-    const float ox = (l.screenW * 0.5f - l.viewX) / l.scale;
-    const float oy = (l.screenH * 0.5f - l.viewY) / l.scale;
     rlPushMatrix();
-    rlTranslatef(l.screenW * 0.5f - l.scale * ox, l.screenH * 0.5f - l.scale * oy, 0.0f);
+    rlTranslatef(l.viewX, l.viewY, 0.0f);
     rlScalef(l.scale, l.scale, 1.0f);
 }
 
@@ -297,26 +304,68 @@ void DrawBoard(const Game& g, float alpha)
 void DrawTrail(const Trail& t, float memoryScale, float now)
 {
     const float life = t.life * memoryScale;
-
-    for (int i = 0; i < t.count; i++)
+    const auto sampleAt = [&](int index) -> const TrailSample&
     {
-        const TrailSample& s = t.samples[(t.head - t.count + i + TRAIL_CAP * 2) % TRAIL_CAP];
-        const float age = now - s.born;
-        if (age < 0.0f) continue;
-
-        float a;
-        if (s.ghost)
+        return t.samples[(t.head - t.count + index + TRAIL_CAP * 2) % TRAIL_CAP];
+    };
+    const auto alphaAt = [&](const TrailSample& sample)
+    {
+        const float age = now - sample.born;
+        if (age < 0.0f) return 0.0f;
+        if (sample.ghost)
         {
-            if (age > t.ghostLife) continue;
-            a = (1.0f - age / t.ghostLife) * t.ghostGain;
+            if (age > t.ghostLife) return 0.0f;
+            return (1.0f - age / t.ghostLife) * t.ghostGain;
         }
-        else
-        {
-            if (age > life) continue;
-            a = (1.0f - age / life) * 0.55f * std::min(1.0f, age / 0.12f);
-        }
+        if (age > life) return 0.0f;
+        return (1.0f - age / life) * 0.55f * std::min(1.0f, age / 0.12f);
+    };
+    const auto curvePoint = [](Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float u)
+    {
+        const float u2 = u * u;
+        const float u3 = u2 * u;
+        return Vector2{
+            0.5f * ((2.0f * p1.x) + (-p0.x + p2.x) * u +
+                    (2.0f * p0.x - 5.0f * p1.x + 4.0f * p2.x - p3.x) * u2 +
+                    (-p0.x + 3.0f * p1.x - 3.0f * p2.x + p3.x) * u3),
+            0.5f * ((2.0f * p1.y) + (-p0.y + p2.y) * u +
+                    (2.0f * p0.y - 5.0f * p1.y + 4.0f * p2.y - p3.y) * u2 +
+                    (-p0.y + 3.0f * p1.y - 3.0f * p2.y + p3.y) * u3)
+        };
+    };
 
-        if (a > 0.004f) DrawCircleV(s.pos, 1.1f + a * 1.1f, ColorAlpha(COL_TEXT, a));
+    constexpr int CURVE_STEPS = 4;
+    for (int i = 0; i + 1 < t.count; i++)
+    {
+        const TrailSample& first = sampleAt(i);
+        const TrailSample& second = sampleAt(i + 1);
+        if (first.ghost != second.ghost) continue;
+
+        const float firstAlpha = alphaAt(first);
+        const float secondAlpha = alphaAt(second);
+        if (firstAlpha <= 0.004f && secondAlpha <= 0.004f) continue;
+
+        const Vector2 p0 = (i > 0 && sampleAt(i - 1).ghost == first.ghost &&
+                            alphaAt(sampleAt(i - 1)) > 0.004f)
+                               ? sampleAt(i - 1).pos : first.pos;
+        const Vector2 p3 = (i + 2 < t.count && sampleAt(i + 2).ghost == first.ghost &&
+                            alphaAt(sampleAt(i + 2)) > 0.004f)
+                               ? sampleAt(i + 2).pos : second.pos;
+
+        Vector2 previous = first.pos;
+        float previousAlpha = firstAlpha;
+        for (int step = 1; step <= CURVE_STEPS; step++)
+        {
+            const float u = (float)step / CURVE_STEPS;
+            const Vector2 point = curvePoint(p0, first.pos, second.pos, p3, u);
+            const float alpha = firstAlpha + (secondAlpha - firstAlpha) * u;
+            const float lineAlpha = (previousAlpha + alpha) * 0.5f;
+            if (lineAlpha > 0.004f)
+                DrawLineEx(previous, point, 1.8f + lineAlpha * 2.0f,
+                           ColorAlpha(COL_TEXT, lineAlpha));
+            previous = point;
+            previousAlpha = alpha;
+        }
     }
 }
 
@@ -332,31 +381,55 @@ void DrawStoryLine(const Game& g)
                        l.storySpacing, ColorAlpha(COL_TEXT_DIM, a));
 }
 
+// A keycap is the key label inside a square-cornered box; the label sits beside it. Widths are
+// measured from the same helper the draw uses so the drawn box always matches the text.
+float HintGroupWidth(const Font& font, const char* key, const char* label, float size, float spacing)
+{
+    const float capW = SpacedWidth(font, key, size, spacing) + size * KEYCAP_PAD_X * 2.0f;
+    return capW + size * 0.55f + SpacedWidth(font, label, size, spacing);
+}
+
+void HintGroup(const Font& font, const char* key, const char* label, float x, float y,
+               float size, float spacing, Color col)
+{
+    const float keyW  = SpacedWidth(font, key, size, spacing);
+    const float capW  = keyW + size * KEYCAP_PAD_X * 2.0f;
+    const float capH  = size * (1.0f + KEYCAP_PAD_Y * 2.0f);
+    const float capY  = y - size * KEYCAP_PAD_Y;
+
+    DrawRectangleRec({ x, capY, capW, capH }, ColorAlpha(COL_BG, 0.0f));
+    DrawRectangleLinesEx({ x, capY, capW, capH }, 1.0f, col);
+    DrawSpaced(font, key, x + size * KEYCAP_PAD_X, y, size, spacing, col);
+    DrawSpaced(font, label, x + capW + size * 0.55f, y, size, spacing, col);
+}
+
 void DrawHints(const Game& g)
 {
     const Layout& l = CurrentLayout();
     const float fade = g.stageTime < 6.0f ? 1.0f : 0.90f;
     const Color col = ColorAlpha(COL_TEXT_FAINT, fade);
 
-    const Font& hfont = g.font;
-    const char* h1k = "esc", *h1t = " - menu";
-    const char* h2k = "r",   *h2t = " - begin again";
-    const char* h3k = "wasd / arrows", *h3t = " - move";
-    float h1kw = SpacedWidth(hfont, h1k, l.hintSize, l.hintSpacing);
-    float h2kw = SpacedWidth(hfont, h2k, l.hintSize, l.hintSpacing);
-    float h3kw = SpacedWidth(hfont, h3k, l.hintSize, l.hintSpacing);
-    float pad = l.hintSize * 0.4f;
-    const float boxh = l.hintSize * 1.2f;
-    DrawRectangleRec({l.margin, l.topRowY - boxh*0.15f, h1kw + pad*2.0f, boxh}, ColorAlpha(COL_BG, 0.0f));
-    DrawRectangleLinesEx({l.margin, l.topRowY - boxh*0.15f, h1kw + pad*2.0f, boxh}, 1.0f, col);
-    DrawSpaced(hfont, h1k, l.margin + pad, l.topRowY, l.hintSize, l.hintSpacing, col);
-    DrawSpaced(hfont, h1t, l.margin + pad*2.0f + h1kw, l.topRowY, l.hintSize, l.hintSpacing, col);
-    DrawRectangleLinesEx({l.margin, l.controlRow2Y - boxh*0.15f, h2kw + pad*2.0f, boxh}, 1.0f, col);
-    DrawSpaced(hfont, h2k, l.margin + pad, l.controlRow2Y, l.hintSize, l.hintSpacing, col);
-    DrawSpaced(hfont, h2t, l.margin + pad*2.0f + h2kw, l.controlRow2Y, l.hintSize, l.hintSpacing, col);
-    DrawRectangleLinesEx({l.margin, l.controlRowY - boxh*0.15f, h3kw + pad*2.0f, boxh}, 1.0f, col);
-    DrawSpaced(hfont, h3k, l.margin + pad, l.controlRowY, l.hintSize, l.hintSpacing, col);
-    DrawSpaced(hfont, h3t, l.margin + pad*2.0f + h3kw, l.controlRowY, l.hintSize, l.hintSpacing, col);
+    const Font& f = g.font;
+    const float size = l.hintSize;
+    const float spacing = l.hintSpacing;
+
+    const char* k1 = "esc";
+    const char* t1 = "- menu";
+    const char* k2 = "r";
+    const char* t2 = "- begin again";
+
+    const float gap = size * 2.4f;
+    const float w1 = HintGroupWidth(f, k1, t1, size, spacing);
+    const float w2 = HintGroupWidth(f, k2, t2, size, spacing);
+    const float rowX = (l.screenW - (w1 + gap + w2)) * 0.5f;
+
+    HintGroup(f, k1, t1, rowX, l.controlRow2Y, size, spacing, col);
+    HintGroup(f, k2, t2, rowX + w1 + gap, l.controlRow2Y, size, spacing, col);
+
+    const char* k3 = "wasd / arrows";
+    const char* t3 = "- move";
+    const float w3 = HintGroupWidth(f, k3, t3, size, spacing);
+    HintGroup(f, k3, t3, (l.screenW - w3) * 0.5f, l.controlRowY, size, spacing, col);
 }
 
 void DrawFade(const Game& g)
@@ -367,10 +440,14 @@ void DrawFade(const Game& g)
                   ColorAlpha(COL_BG_DEEP, g.transition.t));
 }
 
+// Intro, clear and ending text is drawn inside the world view, so it works in design units.
+// Mixing screen pixels in here would get the world transform applied twice.
+constexpr float DESIGN_EDGE = 34.0f;
+constexpr float DESIGN_MID_X = (float)DESIGN_W * 0.5f;
+constexpr float DESIGN_MID_Y = (float)DESIGN_H * 0.5f;
+
 void DrawIntro(const Game& g)
 {
-    const Layout& L = CurrentLayout();
-
     DrawBoard(g, g.boardReveal * (1.0f - 0.70f * Brightness(g.sceneTime, INTRO_LINES)));
     DrawBallShape(g, g.ballReveal);
 
@@ -379,15 +456,14 @@ void DrawIntro(const Game& g)
         const float a = BeatAlpha(g.sceneTime, l.at, l.dur);
         if (a <= 0.001f) continue;
 
-        const float size = l.size * L.scale;
-        const float y = L.viewY + L.viewH * 0.5f - size * 0.5f -
-                        (l.heading ? 40.0f * L.scale : 0.0f);
-        Centered(l.heading ? g.titleFont : g.font, l.text, L.viewX + L.viewW * 0.5f, y, size,
-                l.spacing * L.scale, ColorAlpha(COL_TEXT, a * 0.95f));
+        const float y = DESIGN_MID_Y - l.size * 0.5f - (l.heading ? 40.0f : 0.0f);
+        Centered(l.heading ? g.titleFont : g.font, l.text, DESIGN_MID_X, y, l.size, l.spacing,
+                 ColorAlpha(COL_TEXT, a * 0.95f));
     }
 
-    const float w = SpacedWidth(g.font, "Skip", L.hintSize, L.hintSpacing);
-    DrawSpaced(g.font, "Skip", L.screenW - L.margin - w, L.topRowY, L.hintSize, L.hintSpacing,
+    const float w = SpacedWidth(g.font, "Skip", DESIGN_EDGE * 0.45f, 3.0f);
+    DrawSpaced(g.font, "Skip", (float)DESIGN_W - DESIGN_EDGE - w, DESIGN_EDGE * 0.45f,
+               DESIGN_EDGE * 0.45f, 3.0f,
                ColorAlpha(COL_TEXT_FAINT, 0.9f * std::min(1.0f, g.sceneTime / 2.0f)));
 }
 
@@ -400,24 +476,22 @@ void DrawPlaying(const Game& g)
 
 void DrawClearBeat(const Game& g)
 {
-    const Layout& L = CurrentLayout();
     const float a = std::min(1.0f, g.sceneTime * 1.6f) *
                     std::min(1.0f, (1.9f - g.sceneTime) * 1.6f);
 
-    Centered(g.titleFont, ClearLine(g.board.stage), L.viewX + L.viewW * 0.5f,
-             L.viewY + L.viewH * 0.5f - 15.0f * L.scale, 30.0f * L.scale, 4.0f * L.scale,
-             ColorAlpha(COL_TEXT, a));
+    Centered(g.titleFont, ClearLine(g.board.stage), DESIGN_MID_X, DESIGN_MID_Y - 15.0f, 30.0f,
+             4.0f, ColorAlpha(COL_TEXT, a));
 
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%d / %d", g.board.stage + 1, STAGE_COUNT);
-    const float w = SpacedWidth(g.font, buf, L.hintSize, L.hintSpacing);
-    DrawSpaced(g.font, buf, L.screenW - L.margin - w, L.topRowY, L.hintSize, L.hintSpacing,
+    const float size = DESIGN_EDGE * 0.42f;
+    const float w = SpacedWidth(g.font, buf, size, 3.0f);
+    DrawSpaced(g.font, buf, (float)DESIGN_W - DESIGN_EDGE - w, DESIGN_EDGE * 0.45f, size, 3.0f,
                ColorAlpha(COL_TEXT_FAINT, a));
 }
 
 void DrawEndingSequence(const Game& g)
 {
-    const Layout& L = CurrentLayout();
     const float fade = std::max(0.0f, 1.0f - g.sceneTime / 1.4f);
 
     DrawBoard(g, fade * (1.0f - 0.70f * Brightness(g.sceneTime, ENDING_LINES)));
@@ -428,9 +502,8 @@ void DrawEndingSequence(const Game& g)
         const float a = BeatAlpha(g.sceneTime, l.at, l.dur);
         if (a <= 0.001f) continue;
 
-        Centered(g.font, l.text, L.viewX + L.viewW * 0.5f, L.viewY + L.viewH * 0.5f -
-                12.0f * L.scale, 24.0f * L.scale, 5.0f * L.scale,
-                ColorAlpha(COL_TEXT, a * 0.95f));
+        Centered(g.font, l.text, DESIGN_MID_X, DESIGN_MID_Y - 12.0f, 24.0f, 5.0f,
+                 ColorAlpha(COL_TEXT, a * 0.95f));
     }
 }
 
@@ -443,7 +516,8 @@ void DrawFrame(Game& g)
     BeginDrawing();
         ClearBackground(COL_BG);
 
-        if (g.screen == SCREEN_MENU && g.bgLoaded)
+           if ((g.screen == SCREEN_MENU ||
+               (g.screen == SCREEN_HELP && g.returnScreen == SCREEN_MENU)) && g.bgLoaded)
             DrawTextureRec(g.bg, { 0.0f, 0.0f, g_layout.screenW, g_layout.screenH },
                            { 0.0f, 0.0f }, WHITE);
 
@@ -451,7 +525,10 @@ void DrawFrame(Game& g)
             switch (g.screen)
             {
                 case SCREEN_INTRO:   DrawIntro(g);          break;
-                case SCREEN_PLAYING: DrawPlaying(g);        break;
+                case SCREEN_PLAYING: DrawPlaying(g); break;
+                case SCREEN_HELP:
+                    if (g.returnScreen != SCREEN_MENU) DrawPlaying(g);
+                    break;
                 case SCREEN_CLEAR:   DrawClearBeat(g);      break;
                 case SCREEN_ENDING:  DrawEndingSequence(g); break;
                 default: break;
@@ -462,11 +539,12 @@ void DrawFrame(Game& g)
         {
             DrawStoryLine(g);
             DrawHints(g);
-            DrawHudIcons(g);
+            DrawHudControls(g);
         }
 
         if (g.screen == SCREEN_MENU || g.screen == SCREEN_PAUSE ||
-            g.screen == SCREEN_SETTINGS || g.screen == SCREEN_CREDITS)
+            g.screen == SCREEN_SETTINGS || g.screen == SCREEN_CREDITS ||
+            g.screen == SCREEN_HELP)
         {
             DrawScreenUi(g);
         }
