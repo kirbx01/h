@@ -17,17 +17,22 @@ namespace {
 
 constexpr float FADE_IN  = 2.5f;
 constexpr float FADE_OUT = 1.5f;
+constexpr float CUTSCENE_FADE = 0.8f;
 constexpr float POP_GAIN = 0.5f;
 
 bool g_device = false;
 Music g_music;
+Music g_cutsceneMusic;
 Sound g_pop;
 char  g_musicPath[256] = { 0 };
+char  g_cutscenePath[256] = { 0 };
 char  g_popPath[256]   = { 0 };
 float g_volume = 1.0f;
 bool  g_muted = false;
 float g_fade   = 0.0f;
 float g_fadeTarget = 1.0f;
+float g_cutsceneLevel = 0.0f;
+float g_cutsceneTarget = 0.0f;
 
 bool TryOpen(Music& out, char* log, const char* const* stems, std::size_t count,
              const char* override)
@@ -117,12 +122,29 @@ void Update(float dt)
     else if (g_fade > g_fadeTarget)
         g_fade = FADE_OUT > 0.0f ? std::max(g_fadeTarget, g_fade - dt / FADE_OUT) : g_fadeTarget;
 
+    if (g_cutsceneLevel < g_cutsceneTarget)
+        g_cutsceneLevel = std::min(g_cutsceneTarget, g_cutsceneLevel + dt / CUTSCENE_FADE);
+    else if (g_cutsceneLevel > g_cutsceneTarget)
+        g_cutsceneLevel = std::max(g_cutsceneTarget, g_cutsceneLevel - dt / CUTSCENE_FADE);
+
     const float vol   = g_muted ? 0.0f : std::clamp(g_volume, 0.0f, 1.0f);
-    const float level = vol * g_fade;
+    const float level = vol * g_fade * (1.0f - g_cutsceneLevel);
     if (IsMusicValid(g_music))
     {
         UpdateMusicStream(g_music);
         SetMusicVolume(g_music, level);
+    }
+    if (IsMusicValid(g_cutsceneMusic))
+    {
+        UpdateMusicStream(g_cutsceneMusic);
+        SetMusicVolume(g_cutsceneMusic, vol * g_cutsceneLevel);
+        if (g_cutsceneLevel <= 0.0f && g_cutsceneTarget <= 0.0f)
+        {
+            StopMusicStream(g_cutsceneMusic);
+            UnloadMusicStream(g_cutsceneMusic);
+            g_cutsceneMusic = {};
+            g_cutscenePath[0] = '\0';
+        }
     }
     if (IsSoundValid(g_pop))   SetSoundVolume(g_pop, POP_GAIN * vol);
 }
@@ -130,6 +152,39 @@ void Update(float dt)
 void FadeIn() { g_fadeTarget = 1.0f; }
 
 void FadeOut() { g_fadeTarget = 0.0f; }
+
+void PlayCutscene(bool ending)
+{
+    if (!g_device) return;
+
+    if (IsMusicValid(g_cutsceneMusic)) UnloadMusicStream(g_cutsceneMusic);
+    g_cutsceneMusic = {};
+    g_cutscenePath[0] = '\0';
+    g_cutsceneLevel = 0.0f;
+    g_cutsceneTarget = 1.0f;
+
+    if (ending) g_fadeTarget = 0.0f;
+    else        FadeIn();
+
+    const char* stems[] = { ending ? "closingcutscene" : "openingcutscene" };
+    if (!TryOpen(g_cutsceneMusic, g_cutscenePath, stems, 1, nullptr))
+    {
+        g_cutsceneTarget = 0.0f;
+        TraceLog(LOG_WARNING, "i forgor: no %s cutscene music found", ending ? "closing" : "opening");
+        return;
+    }
+
+    g_cutsceneMusic.looping = false;
+    SetMusicVolume(g_cutsceneMusic, 0.0f);
+    PlayMusicStream(g_cutsceneMusic);
+    TraceLog(LOG_INFO, "i forgor: cutscene music '%s'", g_cutscenePath);
+}
+
+void StopCutscene(bool resumeMain)
+{
+    g_cutsceneTarget = 0.0f;
+    if (resumeMain) FadeIn();
+}
 
 void SetMasterVolume(float v) { g_volume = v; }
 
@@ -141,6 +196,8 @@ void NotifyUserGesture()
 {
     if (!g_device) return;
     if (IsMusicValid(g_music) && !IsMusicStreamPlaying(g_music)) ResumeMusicStream(g_music);
+    if (IsMusicValid(g_cutsceneMusic) && !IsMusicStreamPlaying(g_cutsceneMusic))
+        ResumeMusicStream(g_cutsceneMusic);
 }
 
 void Pop()
@@ -167,6 +224,7 @@ void Shutdown()
     }
 
     if (IsMusicValid(g_music)) UnloadMusicStream(g_music);
+    if (IsMusicValid(g_cutsceneMusic)) UnloadMusicStream(g_cutsceneMusic);
     if (IsSoundValid(g_pop))   UnloadSound(g_pop);
     CloseAudioDevice();
     g_device = false;

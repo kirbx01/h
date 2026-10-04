@@ -1,7 +1,10 @@
 #include "game.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <numeric>
+#include <random>
 
 namespace witness {
 
@@ -56,31 +59,50 @@ Rectangle TileRect(const Domino& d)
     return Rectangle{ d.center.x - w * 0.5f, d.center.y - h * 0.5f, w, h };
 }
 
-void InitBoard(Board& b)
+void InitBoard(Board& b, int stage)
 {
-    b.stage        = 0;
+    b.stage        = std::clamp(stage, 0, STAGE_COUNT - 1);
     b.emptied      = 0;
     b.emptiedTotal = 0;
     b.sealOpen     = false;
     b.doorPulse    = 0.0f;
 
+    static std::mt19937 random(std::random_device{}());
+    std::uniform_int_distribution<int> startPip(1, 6);
+    std::uniform_int_distribution<int> partnerPip(0, 6);
+    std::bernoulli_distribution anchorSide;
+    std::array<int, MAX_TILES> slots;
+    std::iota(slots.begin(), slots.end(), 0);
+    std::shuffle(slots.begin(), slots.end(), random);
+
+    b.startPip = startPip(random);
     for (int i = 0; i < MAX_TILES; i++)
     {
+        const int slot = slots[i];
         Domino& d   = b.tiles[i];
-        d.center    = { LAYOUT[i].x, LAYOUT[i].y };
-        d.horizontal= LAYOUT[i].horizontal;
-        d.valueA    = LAYOUT[i].a;
-        d.valueB    = LAYOUT[i].b;
+        d.center    = { LAYOUT[slot].x, LAYOUT[slot].y };
+        d.horizontal= LAYOUT[slot].horizontal;
+        const int partner = partnerPip(random);
+        if (anchorSide(random))
+        {
+            d.valueA = b.startPip;
+            d.valueB = partner;
+        }
+        else
+        {
+            d.valueA = partner;
+            d.valueB = b.startPip;
+        }
         d.consumedA = false;
         d.consumedB = false;
-        d.pipsLeft  = LAYOUT[i].a + LAYOUT[i].b;
+        d.pipsLeft  = d.valueA + d.valueB;
         d.gone      = false;
-        d.keystone  = LAYOUT[i].keystone;
+        d.keystone  = LAYOUT[slot].keystone;
         d.hitFlash  = 0.0f;
         d.hitCool   = 0.0f;
     }
 
-    const StageConfig& cfg = StageTuning(0);
+    const StageConfig& cfg = StageTuning(b.stage);
     b.sealNeed = cfg.sealNeed;
 }
 

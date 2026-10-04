@@ -20,6 +20,9 @@ rm -rf "$STAGE_DIR"
 mkdir -p "$STAGE_DIR"
 
 cp assets/bg.png "$STAGE_DIR/" 2>/dev/null || true
+if [ -d "assets/animation pics" ]; then
+    cp -R "assets/animation pics" "$STAGE_DIR/"
+fi
 if [ -d assets/fonts ]; then
     cp -R assets/fonts "$STAGE_DIR/"
 fi

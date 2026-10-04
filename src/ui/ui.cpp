@@ -341,7 +341,7 @@ void DrawPause(Game& g)
     y += rowH + gap;
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Begin Again"))
-    { RestartAttempt(g, false); return; }
+    { RestartAttempt(g, false); GoToScreen(g, SCREEN_PLAYING); return; }
     y += rowH + gap;
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Leave"))
@@ -393,10 +393,15 @@ void DrawCredits(Game& g)
     const Layout& l = CurrentLayout();
     const float t = std::min(1.0f, g.sceneTime / 1.6f);
     const float w = CardWidth(l) * 1.3f;
-    const float size = std::min(w * 0.047f, 18.0f);
+    const float baseSize = std::min(w * 0.047f, 18.0f);
+    const float availableH = std::max(1.0f, l.screenH - l.margin * 2.0f);
+    const float fitSize = std::max(6.0f,
+        (availableH - l.margin * 3.8f - 20.0f) / (14.5f * 1.9f + 0.9f));
+    const float size = std::min(baseSize, fitSize);
     const float gap = size * 1.9f;
 
-    const float cardH = gap * 12.5f + l.margin * 1.6f;
+    const float ebh = std::max(20.0f, gap * 0.9f);
+    const float cardH = gap * 14.5f + l.margin * 1.8f + ebh;
     const Rectangle card = { (l.screenW - w) * 0.5f, (l.screenH - cardH) * 0.5f, w, cardH };
     Card(card);
 
@@ -447,15 +452,14 @@ void DrawCredits(Game& g)
                                : "click the link, or TAB then ENTER",
           cx, y, size * 0.85f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
 
-    const float bw = (w - w * 0.10f) * 0.5f;
-    const float by = card.y + card.height - l.margin * 0.9f;
+    const float by = card.y + card.height - l.margin * 0.9f - ebh;
     const float ebw = w * 0.40f;
     const float eby = by;
-    const float ebh = l.margin * 1.9f;
     const float egap = w * 0.04f;
     if (UiButton(g, { cx - ebw - egap * 0.5f, eby, ebw, ebh }, "Play Again"))
     { StartNewGame(g); return; }
-    UiButton(g, { cx + egap * 0.5f, eby, ebw, ebh }, "Main Menu");
+    if (UiButton(g, { cx + egap * 0.5f, eby, ebw, ebh }, "Main Menu"))
+    { GoToScreen(g, SCREEN_MENU); return; }
 
     if (t >= 1.0f)
     {

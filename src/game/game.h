@@ -147,6 +147,7 @@ struct Board
 {
     Domino tiles[MAX_TILES];
     int    stage        = 0;
+    int    startPip     = 1;
     int    emptied      = 0;
     int    emptiedTotal = 0;
     int    sealNeed     = 1;
@@ -301,7 +302,7 @@ void AdvanceStage(Game& g);
 void BeginEnding(Game& g);
 void OpenCredits(Game& g);
 
-void InitBoard(Board& b);
+void InitBoard(Board& b, int stage = 0);
 void UpdateBoard(Game& g, float dt);
 void ResetBall(Game& g);
 void UpdateBall(Game& g, float dt);

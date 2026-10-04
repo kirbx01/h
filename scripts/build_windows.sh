@@ -35,6 +35,7 @@ if [ -d assets ]; then
              assets/bg.png assets/itch_url.txt; do
         [ -e "$f" ] && install -m 644 "$f" "$DIST_DIR/assets/"
     done
+        [ ! -d "assets/animation pics" ] || cp -R "assets/animation pics" "$DIST_DIR/assets/"
     [ ! -d assets/fonts ] || cp -R assets/fonts "$DIST_DIR/assets/"
     rmdir "$DIST_DIR/assets" 2>/dev/null || true
 fi

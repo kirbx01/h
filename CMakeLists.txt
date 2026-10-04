@@ -97,6 +97,7 @@ if(WIN32)
     target_compile_definitions(ifg_core PUBLIC
         _CRT_SECURE_NO_WARNINGS
         WIN32_LEAN_AND_MEAN)
+    target_link_libraries(ifg_core PUBLIC shell32)
 endif()
 
 if(IFG_BUILD_TESTS AND NOT EMSCRIPTEN)

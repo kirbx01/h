@@ -423,7 +423,7 @@ void DrawFade(const Game& g)
     if (g.transition.t <= 0.001f) return;
     const Layout& l = CurrentLayout();
     DrawRectangle(0, 0, (int)l.screenW, (int)l.screenH,
-                  ColorAlpha(g.cutsceneFade ? BLACK : COL_BG_DEEP, g.transition.t));
+                  ColorAlpha(g.cutsceneFade ? WHITE : COL_BG_DEEP, g.transition.t));
 }
 
 constexpr float DESIGN_EDGE = 34.0f;
@@ -512,9 +512,7 @@ void DrawEndingSequence(const Game& g)
 
 void DrawCutscene(const Game& g)
 {
-    constexpr float FADE_TIME = 0.55f;
-    constexpr float PAN_END = 2.30f;
-    constexpr float IMAGE_LENGTH = 3.4f;
+    constexpr float FADE_TIME = 0.65f;
     struct CameraMove { float fromX, fromY, toX, toY, fromScale, toScale; };
     static constexpr CameraMove moves[] =
     {
@@ -528,17 +526,19 @@ void DrawCutscene(const Game& g)
 
     const int image = (g.cutsceneEnding ? 3 : 0) + std::clamp(g.cutsceneIndex, 0, 2);
     const Texture texture = g.cutsceneTextures[image];
-    const float time = std::clamp(g.sceneTime, 0.0f, IMAGE_LENGTH);
+    const float imageLength = g.cutsceneEnding ? 4.5f : 4.2f;
+    const float panEnd = g.cutsceneEnding ? 3.8f : 3.5f;
+    const float time = std::clamp(g.sceneTime, 0.0f, imageLength);
     const float fadeIn = Smooth(time / FADE_TIME);
-    const float fadeOut = Smooth((IMAGE_LENGTH - time) / FADE_TIME);
+    const float fadeOut = Smooth((imageLength - time) / FADE_TIME);
     const float alpha = std::min(fadeIn, fadeOut);
 
-    DrawRectangle(0, 0, (int)g_layout.screenW, (int)g_layout.screenH, BLACK);
+    DrawRectangle(0, 0, (int)g_layout.screenW, (int)g_layout.screenH, WHITE);
     if (texture.id == 0 || texture.width <= 0 || texture.height <= 0 || alpha <= 0.001f)
         return;
 
     const CameraMove& move = moves[image];
-    const float pan = Smooth((time - FADE_TIME) / (PAN_END - FADE_TIME));
+    const float pan = Smooth((time - FADE_TIME) / (panEnd - FADE_TIME));
     const float zoom = move.fromScale + (move.toScale - move.fromScale) * pan;
     const float fit = std::min(g_layout.screenW / texture.width,
                                g_layout.screenH / texture.height);

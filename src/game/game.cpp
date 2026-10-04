@@ -11,7 +11,8 @@ namespace {
 constexpr float INTRO_LENGTH = 13.4f;
 
 constexpr float END_OUT = 9.4f;
-constexpr float CUTSCENE_IMAGE_LENGTH = 3.4f;
+constexpr float OPEN_CUTSCENE_IMAGE_LENGTH = 4.2f;
+constexpr float END_CUTSCENE_IMAGE_LENGTH = 4.5f;
 
 void BeginCutscene(Game& g, bool ending)
 {
@@ -27,6 +28,7 @@ void BeginCutscene(Game& g, bool ending)
     g.transition.target = SCREEN_CUTSCENE;
     g.transition.t = 1.0f;
     g.transition.speed = 2.0f;
+    sound::PlayCutscene(ending);
 }
 
 void FinishCutscene(Game& g)
@@ -41,6 +43,7 @@ void FinishCutscene(Game& g)
     g.transition.target = target;
     g.transition.t = 1.0f;
     g.transition.speed = 2.0f;
+    sound::StopCutscene(!g.cutsceneEnding);
 }
 
 void UpdateCutscene(Game& g)
@@ -51,9 +54,11 @@ void UpdateCutscene(Game& g)
         return;
     }
 
-    while (g.sceneTime + 0.0001f >= CUTSCENE_IMAGE_LENGTH)
+    const float imageLength = g.cutsceneEnding ? END_CUTSCENE_IMAGE_LENGTH
+                                               : OPEN_CUTSCENE_IMAGE_LENGTH;
+    while (g.sceneTime + 0.0001f >= imageLength)
     {
-        g.sceneTime = std::max(0.0f, g.sceneTime - CUTSCENE_IMAGE_LENGTH);
+        g.sceneTime = std::max(0.0f, g.sceneTime - imageLength);
         g.cutsceneIndex++;
         if (g.cutsceneIndex >= 3)
         {
@@ -133,10 +138,10 @@ void StartNewGame(Game& g)
     g.attempt   = 0;
     g.finished  = false;
     g.hasSave   = false;
-    g.ball.pipValue = 1;
 
     ClearSession();
     EnterStage(g, 0);
+    g.ball.pipValue = g.board.startPip;
     BeginCutscene(g, false);
 }
 
@@ -147,6 +152,7 @@ void ContinueGame(Game& g, bool saved)
         g.hasSave = true;
         g.trail.Clear();
         EnterStage(g, g.board.stage);
+        g.ball.pipValue = g.board.startPip;
         g.statusNote = "resumed from where you left it.";
         RequestTransition(g, SCREEN_PLAYING, 2.4f);
     }
@@ -182,6 +188,15 @@ void EnterStage(Game& g, int stage)
 
 void RestartAttempt(Game& g, bool fromEdge)
 {
+    if (g.ball.lost)
+    {
+        const int stage = g.board.stage;
+        const int emptiedTotal = g.board.emptiedTotal;
+        InitBoard(g.board, stage);
+        g.board.emptiedTotal = emptiedTotal;
+        g.ball.pipValue = g.board.startPip;
+    }
+
     g.trail.Clear();
     ResetBall(g);
     g.stageTime = 0.0f;

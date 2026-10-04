@@ -44,6 +44,8 @@ void Init() {}
 void Update(float) {}
 void FadeIn() {}
 void FadeOut() {}
+void PlayCutscene(bool) {}
+void StopCutscene(bool) {}
 void SetMasterVolume(float) {}
 void NotifyUserGesture() {}
 void Pop() {}
@@ -357,7 +359,7 @@ int main()
     Step(g, 60 * 12);
         Check(g.screen == SCREEN_CUTSCENE && g.cutsceneEnding,
             "the ending text leads into the ending images");
-        Step(g, 60 * 9);
+        Step(g, 60 * 14);
         Check(g.screen == SCREEN_CREDITS, "the ending images resolve into the credits");
     Check(g.finished, "the finished run is marked as finished");
 
@@ -387,13 +389,13 @@ int main()
     Check(g.trail.count == 0, "starting over wipes the trace");
         Check(g.screen == SCREEN_CUTSCENE && !g.cutsceneEnding && g.cutsceneIndex == 0,
             "starting over begins the opening sequence");
-        UpdateGame(g, 3.5f);
+        UpdateGame(g, 4.3f);
         Check(g.screen == SCREEN_CUTSCENE && g.cutsceneIndex == 1,
             "the opening sequence advances through its images in order");
-        UpdateGame(g, 6.5f);
+        UpdateGame(g, 4.3f);
         Check(g.screen == SCREEN_CUTSCENE && g.cutsceneIndex == 2,
             "the opening sequence reaches its final image");
-        UpdateGame(g, 3.2f);
+        UpdateGame(g, 4.3f);
         Check(g.screen == SCREEN_PLAYING,
             "the opening sequence transitions into gameplay");
 
@@ -403,7 +405,7 @@ int main()
         UpdateGame(g, 0.01f);
         Check(g.screen == SCREEN_CUTSCENE && g.cutsceneEnding && g.cutsceneIndex == 0,
             "the ending sequence starts after the ending text");
-        UpdateGame(g, 10.2f);
+        UpdateGame(g, 13.6f);
         Check(g.screen == SCREEN_CREDITS,
             "the ending sequence transitions to credits");
 
