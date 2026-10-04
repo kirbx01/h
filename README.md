@@ -2,7 +2,7 @@
 	<a href="https://kirbx01.itch.io/i-forgor"><img src="https://img.shields.io/badge/Play%20on-itch.io-fa5c5c?style=for-the-badge" alt="Play on itch.io"></a>
 	<img src="https://img.shields.io/badge/game-i%20forgor-000000?style=for-the-badge" alt="i forgor game">
 	<img src="https://img.shields.io/badge/built%20with-raylib-ff3366?style=for-the-badge" alt="Built with raylib">
-		<img src="https://img.shields.io/badge/built%20for-BYOG-ff0000?style=for-the-badge" alt="Built for BYOG">
+		<img src="https://img.shields.io/badge/built%20for-BYOG-ffff00?style=for-the-badge" alt="Built for BYOG">
 </p>
 
 # i forgor
