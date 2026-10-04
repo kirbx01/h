@@ -43,6 +43,12 @@ constexpr struct
 
 static_assert(sizeof(LAYOUT) / sizeof(LAYOUT[0]) == MAX_TILES, "layout must fill the board");
 
+std::mt19937& BoardRandom()
+{
+    static std::mt19937 random(std::random_device{}());
+    return random;
+}
+
 }
 
 const Vector2 BALL_START = { 122.0f, 664.0f };
@@ -59,6 +65,78 @@ Rectangle TileRect(const Domino& d)
     return Rectangle{ d.center.x - w * 0.5f, d.center.y - h * 0.5f, w, h };
 }
 
+void ConfigureBoardForStage(Board& b, int stage)
+{
+    b.stage = std::clamp(stage, 0, STAGE_COUNT - 1);
+    const StageConfig& cfg = StageTuning(b.stage);
+    std::array<int, MAX_TILES> active{};
+    int activeCount = 0;
+    for (int i = 0; i < MAX_TILES; i++)
+    {
+        if (!b.tiles[i].gone) active[activeCount++] = i;
+    }
+
+    b.sealNeed = std::min(cfg.sealNeed, activeCount);
+    b.sealOpen = b.sealNeed == 0;
+
+    if (activeCount == 0) return;
+
+    static constexpr int START_MATCHES[STAGE_COUNT] = { 16, 12, 8, 5, 3 };
+    const int matchCount = std::min(activeCount,
+        std::max(b.sealNeed, START_MATCHES[b.stage]));
+    const Vector2 door = { DOOR_X + DOOR_W * 0.5f, DOOR_Y + DOOR_H * 0.5f };
+    const auto routeCost = [&](int index)
+    {
+        const Vector2 p = b.tiles[index].center;
+        const float fromStart = VLen(VSub(p, BALL_START));
+        const float toExit = VLen(VSub(door, p));
+        return fromStart + toExit;
+    };
+
+    std::sort(active.begin(), active.begin() + activeCount,
+              [&](int a, int c) { return routeCost(a) < routeCost(c); });
+
+    const int matchStart = (activeCount - matchCount) * b.stage / (STAGE_COUNT - 1);
+    std::uniform_int_distribution<int> pip(1, 6);
+    b.startPip = pip(BoardRandom());
+
+    int secondary = 0;
+    for (int order = 0; order < activeCount; order++)
+    {
+        const int index = active[order];
+        Domino& d = b.tiles[index];
+        const bool directMatch = order >= matchStart && order < matchStart + matchCount;
+        int valueA;
+        int valueB;
+
+        if (directMatch)
+        {
+            int offset = 0;
+            if (b.stage == 0) offset = (order % 3 == 0) ? 0 : 1 + (order % 2);
+            else if (b.stage == 1) offset = 1 + (order % 3);
+            else if (b.stage == 2) offset = 1 + ((order * 2) % 5);
+            else if (b.stage == 3) offset = 1 + ((order * 3) % 6);
+            else offset = 2 + ((order * 2) % 5);
+            valueA = b.startPip;
+            valueB = (b.startPip + offset) % 7;
+            if (d.consumedA && !d.consumedB) valueB = b.startPip;
+            else if (d.consumedB && !d.consumedA) valueA = b.startPip;
+        }
+        else
+        {
+            const int stride = b.stage < 2 ? 1 : b.stage;
+            valueA = (b.startPip + 1 + secondary % 6) % 7;
+            valueB = (valueA + stride) % 7;
+            if (valueB == b.startPip) valueB = (valueB + 1) % 7;
+            secondary++;
+        }
+
+        d.valueA = d.consumedA ? 0 : valueA;
+        d.valueB = d.consumedB ? 0 : valueB;
+        d.pipsLeft = d.valueA + d.valueB;
+    }
+}
+
 void InitBoard(Board& b, int stage)
 {
     b.stage        = std::clamp(stage, 0, STAGE_COUNT - 1);
@@ -67,32 +145,19 @@ void InitBoard(Board& b, int stage)
     b.sealOpen     = false;
     b.doorPulse    = 0.0f;
 
-    static std::mt19937 random(std::random_device{}());
-    std::uniform_int_distribution<int> startPip(1, 6);
-    std::uniform_int_distribution<int> partnerPip(0, 6);
-    std::bernoulli_distribution anchorSide;
+    std::mt19937& random = BoardRandom();
     std::array<int, MAX_TILES> slots;
     std::iota(slots.begin(), slots.end(), 0);
     std::shuffle(slots.begin(), slots.end(), random);
 
-    b.startPip = startPip(random);
     for (int i = 0; i < MAX_TILES; i++)
     {
         const int slot = slots[i];
         Domino& d   = b.tiles[i];
         d.center    = { LAYOUT[slot].x, LAYOUT[slot].y };
         d.horizontal= LAYOUT[slot].horizontal;
-        const int partner = partnerPip(random);
-        if (anchorSide(random))
-        {
-            d.valueA = b.startPip;
-            d.valueB = partner;
-        }
-        else
-        {
-            d.valueA = partner;
-            d.valueB = b.startPip;
-        }
+        d.valueA = 0;
+        d.valueB = 0;
         d.consumedA = false;
         d.consumedB = false;
         d.pipsLeft  = d.valueA + d.valueB;
@@ -102,8 +167,7 @@ void InitBoard(Board& b, int stage)
         d.hitCool   = 0.0f;
     }
 
-    const StageConfig& cfg = StageTuning(b.stage);
-    b.sealNeed = cfg.sealNeed;
+    ConfigureBoardForStage(b, b.stage);
 }
 
 static void StripTile(Game& g, Domino& d, bool halfA)

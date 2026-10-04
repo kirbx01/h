@@ -84,7 +84,6 @@
     </div>
   </div>
 </div>
-<div id="note">wasd or arrows to move</div>
 
 <script>
   var Module = {
@@ -117,6 +116,8 @@
       return c;
     })()
   };
+
+  document.getElementById('wrap').appendChild(Module.canvas);
 
   Module.canvas.addEventListener('webglcontextlost', function (e) {
     e.preventDefault();

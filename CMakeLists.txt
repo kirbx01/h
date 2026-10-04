@@ -83,10 +83,14 @@ if(EMSCRIPTEN)
     set(IFG_WEB_ASSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets" CACHE PATH
         "Folder preloaded into the web build")
 
+    set_property(TARGET i_forgor APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/web/index.html")
+
     target_link_options(i_forgor PRIVATE
         "-sUSE_GLFW=3"
         "-sASYNCIFY"
         "-sALLOW_MEMORY_GROWTH=1"
+        "-sEXPORTED_RUNTIME_METHODS=HEAPF32"
         "-sFORCE_FILESYSTEM=1"
         "--shell-file=${CMAKE_CURRENT_SOURCE_DIR}/web/index.html"
         "--preload-file=${IFG_WEB_ASSET_DIR}@assets")

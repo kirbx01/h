@@ -216,7 +216,8 @@ bool UiButton(Game& g, Rectangle box, const char* label)
     return fired;
 }
 
-bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, bool underlined)
+bool DrawClickableLink(Game& g, const char* text, const char* url, float x, float y,
+                       float size, bool underlined)
 {
     const float w = SpacedTextWidth(g.font, text, size, LINK_SPACING);
     const float h = MeasureTextEx(g.font, text, size, 0.0f).y;
@@ -225,8 +226,9 @@ bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, 
     const bool hover = CheckCollisionPointRec(GetMousePosition(), bounds);
     if (hover) g.linkFocus = true;
 
-    const bool urlSet = g.itchUrl.compare(0, 8, "https://") == 0 ||
-                        g.itchUrl.compare(0, 7, "http://") == 0;
+    const std::string target = url ? url : "";
+    const bool urlSet = target.compare(0, 8, "https://") == 0 ||
+                        target.compare(0, 7, "http://") == 0;
 
     const bool lit = (hover || g.linkFocus) && urlSet;
     const Color color = lit ? HOVER_TEXT : ColorAlpha(COL_TEXT_DIM, urlSet ? 1.0f : 0.80f);
@@ -252,7 +254,7 @@ bool DrawClickableLink(Game& g, const char* text, float x, float y, float size, 
     if (fired)
     {
         sound::Pop();
-        if (urlSet) platform::OpenUrl(g.itchUrl.c_str());
+        if (urlSet) platform::OpenUrl(target.c_str());
     }
 
     return fired;
@@ -264,7 +266,7 @@ void DrawMenu(Game& g)
     const float w = CardWidth(l);
     const float rowH = w * 0.135f;
     const float gap = rowH * 0.34f;
-    const int rows = g.hasSave ? 5 : 4;
+    const int rows = g.hasSave ? 6 : 5;
 
     const float menuH = rows * (rowH + gap);
     const float cx = l.screenW * 0.5f;
@@ -305,6 +307,10 @@ void DrawMenu(Game& g)
         GoToScreen(g, SCREEN_SETTINGS);
         return;
     }
+    y += rowH + gap;
+
+    if (UiButton(g, { row.x, y, row.width, row.height }, "Credits"))
+    { GoToScreen(g, SCREEN_CREDITS); return; }
     y += rowH + gap;
 
     if (UiButton(g, { row.x, y, row.width, row.height }, "Quit")) CloseWindow();
@@ -440,17 +446,19 @@ void DrawCredits(Game& g)
           ColorAlpha(COL_TEXT_FAINT, t));
     y += gap * 1.4f;
 
-    const char* url = g.itchUrl.empty() ? "itch.io page not configured" : g.itchUrl.c_str();
-    const float urlSize = size * 1.15f;
-    const float urlW = SpacedTextWidth(g.font, url, urlSize, LINK_SPACING);
-    Label(g, "itch.io", cx, y, size * 0.88f, 3.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    const char* itchUrl = "https://kirbx01.itch.io";
+    const char* githubUrl = "https://github.com/kirbx01";
+    const float urlSize = size * 0.82f;
+    const float itchWidth = SpacedTextWidth(g.font, itchUrl, urlSize, LINK_SPACING);
+    const float githubWidth = SpacedTextWidth(g.font, githubUrl, urlSize, LINK_SPACING);
+    const float linkGap = size * 0.8f;
+    const float linkLeft = cx - (itchWidth + linkGap + githubWidth) * 0.5f;
+    Label(g, "Check out the creator at", cx, y, size * 0.88f, 3.0f,
+          ColorAlpha(COL_TEXT_FAINT, t));
     y += gap;
-    DrawClickableLink(g, url, cx - urlW * 0.5f, y, urlSize, true);
-    y += gap * 1.2f;
-
-    Label(g, g.itchUrl.empty() ? "build with -DIFG_ITCH_URL=... or add assets/itch_url.txt"
-                               : "click the link, or TAB then ENTER",
-          cx, y, size * 0.85f, 2.0f, ColorAlpha(COL_TEXT_FAINT, t));
+    DrawClickableLink(g, itchUrl, itchUrl, linkLeft, y, urlSize, true);
+    DrawClickableLink(g, githubUrl, githubUrl, linkLeft + itchWidth + linkGap, y,
+                      urlSize, true);
 
     const float by = card.y + card.height - l.margin * 0.9f - ebh;
     const float ebw = w * 0.40f;

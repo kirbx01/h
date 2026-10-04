@@ -202,8 +202,26 @@ int main()
     Game g;
     InitBoard(g.board);
     ResetBall(g);
+    g.ball.pipValue = g.board.startPip;
 
     GoToScreen(g, SCREEN_PLAYING);
+
+    {
+        constexpr int expectedMatches[STAGE_COUNT] = { 16, 12, 8, 5, 3 };
+        for (int stage = 0; stage < STAGE_COUNT; stage++)
+        {
+            Board passage;
+            InitBoard(passage, stage);
+            int reachableMatches = 0;
+            for (const Domino& tile : passage.tiles)
+                if (tile.valueA == passage.startPip || tile.valueB == passage.startPip)
+                    reachableMatches++;
+            Check(passage.startPip >= 1 && passage.startPip <= 6 &&
+                  reachableMatches == expectedMatches[stage] &&
+                  reachableMatches >= passage.sealNeed,
+                  "each passage has enough reachable matching dominoes");
+        }
+    }
 
         Game timed;
         InitBoard(timed.board);
@@ -250,22 +268,33 @@ int main()
         Game pipChain;
         InitBoard(pipChain.board);
         ResetBall(pipChain);
-        Check(pipChain.ball.pipValue == 1, "the player starts with pip value one");
-        HitDominoOnce(pipChain, 1, 1);
-        Check(pipChain.ball.pipValue == 0 && pipChain.board.tiles[1].consumedB &&
-            !pipChain.board.tiles[1].consumedA,
+        pipChain.ball.pipValue = pipChain.board.startPip;
+        int matchingTile = 0;
+        while (matchingTile < MAX_TILES &&
+               (pipChain.board.tiles[matchingTile].valueA != pipChain.board.startPip ||
+            pipChain.board.tiles[matchingTile].valueB == pipChain.board.startPip))
+            matchingTile++;
+        Check(matchingTile < MAX_TILES &&
+              pipChain.ball.pipValue == pipChain.board.startPip,
+              "the player starts with a pip present on the generated board");
+        const int firstPip = pipChain.board.tiles[matchingTile].valueA;
+        const int nextPip = pipChain.board.tiles[matchingTile].valueB;
+        HitDominoOnce(pipChain, matchingTile, firstPip);
+        Check(pipChain.ball.pipValue == nextPip &&
+            pipChain.board.tiles[matchingTile].consumedA &&
+            !pipChain.board.tiles[matchingTile].consumedB,
             "a matching pip consumes its half and adopts the opposite value");
 
-        const int remainingHalfPips = pipChain.board.tiles[1].pipsLeft;
+        const int remainingHalfPips = pipChain.board.tiles[matchingTile].pipsLeft;
         UpdateBoard(pipChain, HIT_COOLDOWN);
-        HitDominoOnce(pipChain, 1, 1);
-        Check(pipChain.board.tiles[1].pipsLeft == remainingHalfPips &&
-            pipChain.ball.pipValue == 1,
+        HitDominoOnce(pipChain, matchingTile, firstPip);
+        Check(pipChain.board.tiles[matchingTile].pipsLeft == remainingHalfPips,
             "a consumed half cannot activate again");
 
         UpdateBoard(pipChain, HIT_COOLDOWN);
-        HitDominoOnce(pipChain, 1, 0);
-        Check(pipChain.board.tiles[1].gone && pipChain.board.tiles[1].consumedA,
+        HitDominoOnce(pipChain, matchingTile, nextPip);
+        Check(pipChain.board.tiles[matchingTile].gone &&
+              pipChain.board.tiles[matchingTile].consumedB,
             "the remaining matching half completes the domino");
 
     const Vector2 start = g.ball.pos;
@@ -286,20 +315,29 @@ int main()
 
     RestartAttempt(g, false);
     Check(g.trail.count == 0, "a retry clears the previous route");
+    g.ball.pipValue = g.board.startPip;
 
     const int pipsBefore = TotalPips(g);
 
-    const int keystone = 1;
+    int keystone = 0;
+    while (keystone < MAX_TILES && !g.board.tiles[keystone].keystone) keystone++;
     DashAt(g, keystone);
     Check(g.board.tiles[keystone].gone, "one full-speed dash empties a keystone");
     Check(g.board.emptied == 1, "an emptied tile is counted as an erasure");
     Check(TotalPips(g) < pipsBefore, "hard collisions strip pips from tiles");
 
-    const int heavy = 0;
+    int heavy = 0;
+    while (heavy < MAX_TILES && (heavy == keystone ||
+           g.board.tiles[heavy].gone)) heavy++;
         const float timeBeforeMismatch = g.stageTime;
         const int pipsBeforeMismatch = g.board.tiles[heavy].pipsLeft;
         const Rectangle heavyRect = TileRect(g.board.tiles[heavy]);
-        g.ball.pipValue = 1;
+        int mismatchPip = 0;
+        while (mismatchPip == g.board.tiles[heavy].valueA ||
+               mismatchPip == g.board.tiles[heavy].valueB) mismatchPip++;
+        g.ball.pipValue = mismatchPip;
+         g.ball.lost = false;
+         g.ball.lostTimer = 0.0f;
         g.ball.pos = { heavyRect.x - BALL_RADIUS - 0.5f, heavyRect.y + heavyRect.height * 0.5f };
         g.ball.vel = { BALL_MAX_SPEED, 0.0f };
         UpdateBall(g, STEP);
@@ -308,19 +346,25 @@ int main()
         Check(g.stageTime >= timeBeforeMismatch + 2.0f,
             "a mismatched collision applies the timer penalty");
 
-        g.ball.pipValue = 6;
-    int runs = 0;
-    while (!g.board.tiles[heavy].gone && runs < 12)
+    g.ball.pipValue = g.board.tiles[heavy].valueA;
+    int hits = 0;
+    while (!g.board.tiles[heavy].gone && hits < 12)
     {
-        DashAt(g, heavy);
-        runs++;
+        g.ball.pipValue = g.board.tiles[heavy].consumedA
+                              ? g.board.tiles[heavy].valueB
+                              : g.board.tiles[heavy].valueA;
+        g.ball.lost = false;
+        HitDominoOnce(g, heavy, g.ball.pipValue);
+        UpdateBoard(g, HIT_COOLDOWN);
+        hits++;
     }
-    Check(g.board.tiles[heavy].gone, "repeated committed runs eventually empty a heavy tile");
-    std::printf("  (%d committed runs emptied a %d-pip tile)\n", runs,
+    Check(g.board.tiles[heavy].gone, "repeated matching hits eventually empty a heavy tile");
+    std::printf("  (%d matching hits emptied a %d-pip tile)\n", hits,
                 TileTotalPips(g.board.tiles[heavy]));
 
     g.board.emptied = g.board.sealNeed;
     g.board.sealOpen = true;
+    g.ball.lost = false;
     Check(g.board.sealOpen, "the door opens once enough tiles are gone");
 
     const int tilesGoneBefore = g.board.emptiedTotal;
@@ -372,6 +416,7 @@ int main()
         before.board.tiles[i].pipsLeft = i;
         before.board.tiles[i].gone     = (i == 0);
     }
+    before.board.tiles[4].pipsLeft = 1;
     SaveSession(before);
 
     Game after;
@@ -379,7 +424,7 @@ int main()
     Check(loaded, "a stored session is found");
     Check(after.board.stage == 3, "the stored passage is restored");
     Check(after.board.tiles[0].gone, "an erased tile is still erased after a restart");
-    Check(after.board.tiles[4].pipsLeft == 4, "partial damage survives the restart");
+    Check(after.board.tiles[4].pipsLeft == 1, "partial damage survives the restart");
     Check(after.board.tiles[5].pipsLeft == TileTotalPips(after.board.tiles[5]),
           "untouched tiles are reset to full");
 

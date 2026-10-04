@@ -164,10 +164,8 @@ void ContinueGame(Game& g, bool saved)
 
 void EnterStage(Game& g, int stage)
 {
-    g.board.stage    = std::clamp(stage, 0, STAGE_COUNT - 1);
+    ConfigureBoardForStage(g.board, stage);
     g.board.emptied  = 0;
-    g.board.sealNeed = StageTuning(g.board.stage).sealNeed;
-    g.board.sealOpen = false;
     g.board.doorPulse = 0.0f;
 
     g.attempt   = 0;
@@ -178,6 +176,7 @@ void EnterStage(Game& g, int stage)
 
     g.trail.MarkGhost();
     ResetBall(g);
+    g.ball.pipValue = g.board.startPip;
 
     const char* line = StageTuning(g.board.stage).enterLine;
     if (g.board.stage == 0) g.story.Say(line, 3.4f);

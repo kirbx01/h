@@ -39,7 +39,7 @@ void DrawCredits(Game& g);
 bool UiButton(Game& g, Rectangle box, const char* label);
 bool UiTextControl(Game& g, Rectangle box, const char* label, float size, float spacing,
                    Color idleColor = COL_TEXT_FAINT);
-bool DrawClickableLink(Game& g, const char* text, float x, float y, float size,
-                       bool underlined);
+bool DrawClickableLink(Game& g, const char* text, const char* url, float x, float y,
+                       float size, bool underlined);
 
 }

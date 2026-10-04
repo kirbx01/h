@@ -303,6 +303,7 @@ void BeginEnding(Game& g);
 void OpenCredits(Game& g);
 
 void InitBoard(Board& b, int stage = 0);
+void ConfigureBoardForStage(Board& b, int stage);
 void UpdateBoard(Game& g, float dt);
 void ResetBall(Game& g);
 void UpdateBall(Game& g, float dt);
