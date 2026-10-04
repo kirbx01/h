@@ -345,9 +345,11 @@ void DrawTrail(const Trail& t, float memoryScale, float now)
             const float u = (float)step / CURVE_STEPS;
             const Vector2 point = curvePoint(p0, first.pos, second.pos, p3, u);
             const float alpha = firstAlpha + (secondAlpha - firstAlpha) * u;
-            const float lineAlpha = (previousAlpha + alpha) * 0.5f;
+            const float sketch = 0.78f + 0.22f *
+                                 std::sin((float)(i * CURVE_STEPS + step) * 2.17f);
+            const float lineAlpha = (previousAlpha + alpha) * 0.5f * sketch;
             if (lineAlpha > 0.004f)
-                DrawLineEx(previous, point, 1.8f + lineAlpha * 2.0f,
+                DrawLineEx(previous, point, 0.75f + lineAlpha,
                            ColorAlpha(COL_TEXT, lineAlpha));
             previous = point;
             previousAlpha = alpha;
@@ -421,7 +423,7 @@ void DrawFade(const Game& g)
     if (g.transition.t <= 0.001f) return;
     const Layout& l = CurrentLayout();
     DrawRectangle(0, 0, (int)l.screenW, (int)l.screenH,
-                  ColorAlpha(COL_BG_DEEP, g.transition.t));
+                  ColorAlpha(g.cutsceneFade ? BLACK : COL_BG_DEEP, g.transition.t));
 }
 
 constexpr float DESIGN_EDGE = 34.0f;
@@ -454,6 +456,25 @@ void DrawPlaying(const Game& g)
     DrawTrail(g.trail, g.settings.memory, g.clock);
     DrawBoard(g, 1.0f);
     DrawBallShape(g, 1.0f - (g.ball.lost ? std::min(1.0f, g.ball.lostTimer * 2.2f) : 0.0f));
+}
+
+void DrawFailureOverlay(const Game& g)
+{
+    if (!g.ball.lost) return;
+
+    DrawRectangle(0, 0, (int)g_layout.screenW, (int)g_layout.screenH,
+                  ColorAlpha(COL_BG_DEEP, 0.68f));
+
+    const float cx = g_layout.screenW * 0.5f;
+    const float cy = g_layout.screenH * 0.5f;
+    const float size = std::clamp(g_layout.screenH * 0.055f, 28.0f, 44.0f);
+    const Color red = { 0x88, 0x08, 0x08, 255 };
+
+    Centered(g.font, "oops!", cx, cy - size * 1.55f, size, size * 0.12f, red);
+    Centered(g.font, "you forgor", cx, cy - size * 0.35f, size * 0.76f,
+             size * 0.10f, COL_TEXT);
+    Centered(g.font, "press r to try again", cx, cy + size * 0.85f,
+             g_layout.hintSize, g_layout.hintSpacing, HUD_VIOLET);
 }
 
 void DrawClearBeat(const Game& g)
@@ -489,6 +510,52 @@ void DrawEndingSequence(const Game& g)
     }
 }
 
+void DrawCutscene(const Game& g)
+{
+    constexpr float FADE_TIME = 0.55f;
+    constexpr float PAN_END = 2.30f;
+    constexpr float IMAGE_LENGTH = 3.4f;
+    struct CameraMove { float fromX, fromY, toX, toY, fromScale, toScale; };
+    static constexpr CameraMove moves[] =
+    {
+        {  0.55f, -0.45f, -0.35f,  0.35f, 0.89f, 0.95f },
+        { -0.70f,  0.50f,  0.45f, -0.55f, 0.88f, 0.95f },
+        {  0.45f, -0.25f, -0.30f,  0.60f, 0.95f, 0.82f },
+        {  0.60f, -0.35f, -0.45f,  0.40f, 0.89f, 0.95f },
+        { -0.55f,  0.45f,  0.50f, -0.50f, 0.95f, 0.84f },
+        {  0.35f, -0.30f, -0.25f,  0.25f, 0.88f, 0.62f },
+    };
+
+    const int image = (g.cutsceneEnding ? 3 : 0) + std::clamp(g.cutsceneIndex, 0, 2);
+    const Texture texture = g.cutsceneTextures[image];
+    const float time = std::clamp(g.sceneTime, 0.0f, IMAGE_LENGTH);
+    const float fadeIn = Smooth(time / FADE_TIME);
+    const float fadeOut = Smooth((IMAGE_LENGTH - time) / FADE_TIME);
+    const float alpha = std::min(fadeIn, fadeOut);
+
+    DrawRectangle(0, 0, (int)g_layout.screenW, (int)g_layout.screenH, BLACK);
+    if (texture.id == 0 || texture.width <= 0 || texture.height <= 0 || alpha <= 0.001f)
+        return;
+
+    const CameraMove& move = moves[image];
+    const float pan = Smooth((time - FADE_TIME) / (PAN_END - FADE_TIME));
+    const float zoom = move.fromScale + (move.toScale - move.fromScale) * pan;
+    const float fit = std::min(g_layout.screenW / texture.width,
+                               g_layout.screenH / texture.height);
+    const float width = texture.width * fit * zoom;
+    const float height = texture.height * fit * zoom;
+    const float marginX = std::max(0.0f, (g_layout.screenW - width) * 0.5f);
+    const float marginY = std::max(0.0f, (g_layout.screenH - height) * 0.5f);
+    const float offsetX = marginX * 0.82f * (move.fromX + (move.toX - move.fromX) * pan);
+    const float offsetY = marginY * 0.82f * (move.fromY + (move.toY - move.fromY) * pan);
+    const Rectangle source = { 0.0f, 0.0f, (float)texture.width, (float)texture.height };
+    const Rectangle dest = { (g_layout.screenW - width) * 0.5f + offsetX,
+                             (g_layout.screenH - height) * 0.5f + offsetY,
+                             width, height };
+
+    DrawTexturePro(texture, source, dest, { 0.0f, 0.0f }, 0.0f, ColorAlpha(WHITE, alpha));
+}
+
 void (*FrameDrawn)() = nullptr;
 
 void DrawFrame(Game& g)
@@ -517,6 +584,8 @@ void DrawFrame(Game& g)
             }
         EndWorldView();
 
+        if (g.screen == SCREEN_CUTSCENE) DrawCutscene(g);
+
         if (g.screen == SCREEN_PLAYING)
         {
             DrawStoryLine(g);
@@ -535,6 +604,8 @@ void DrawFrame(Game& g)
             char pipValue[2] = { (char)('0' + std::clamp(g.ball.pipValue, 0, 6)), '\0' };
             DrawSpaced(g.font, pipValue, boxX + 44.0f, boxY + 9.0f, 16.0f, 0.0f, HUD_VIOLET);
         }
+
+        if (g.screen == SCREEN_PLAYING) DrawFailureOverlay(g);
 
         if (g.screen == SCREEN_MENU || g.screen == SCREEN_PAUSE ||
             g.screen == SCREEN_SETTINGS || g.screen == SCREEN_CREDITS ||

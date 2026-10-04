@@ -209,9 +209,13 @@ int main()
         GoToScreen(timed, SCREEN_PLAYING);
         timed.stageTime = PASSAGE_TIME_LIMIT - STEP * 0.5f;
         UpdateGame(timed, STEP);
+        const float failedStageTime = timed.stageTime;
+        UpdateGame(timed, 1.0f);
+        Check(timed.ball.lost && timed.attempt == 0 && timed.stageTime == failedStageTime,
+            "the 20-second passage limit freezes the failed attempt");
+        RestartAttempt(timed, false);
         Check(timed.stageTime == 0.0f && timed.attempt == 1,
-            "the 20-second passage limit resets the attempt");
-        Check(timed.story.line == "Time's Up.", "a timed-out attempt reports the timeout");
+            "retry restarts a timed-out attempt");
 
     int intact = 0, keystones = 0, pips = 0;
     for (int i = 0; i < MAX_TILES; i++)
@@ -279,10 +283,7 @@ int main()
     g_keys.d = false;
 
     RestartAttempt(g, false);
-    bool ghosts = false;
-    for (int i = 0; i < TRAIL_CAP; i++) if (g.trail.samples[i].ghost) ghosts = true;
-    Check(ghosts, "a retry keeps the previous route visible as a ghost");
-    Check(g.trail.count > 5, "the ghost route is still there after the reset");
+    Check(g.trail.count == 0, "a retry clears the previous route");
 
     const int pipsBefore = TotalPips(g);
 
@@ -354,7 +355,10 @@ int main()
     Check(g.screen == SCREEN_ENDING, "the last exit leads to the ending");
 
     Step(g, 60 * 12);
-    Check(g.screen == SCREEN_CREDITS, "the ending resolves into the credits");
+        Check(g.screen == SCREEN_CUTSCENE && g.cutsceneEnding,
+            "the ending text leads into the ending images");
+        Step(g, 60 * 9);
+        Check(g.screen == SCREEN_CREDITS, "the ending images resolve into the credits");
     Check(g.finished, "the finished run is marked as finished");
 
     Game before;
@@ -381,7 +385,27 @@ int main()
     Check(g.board.stage == 0, "starting over returns to the first passage");
     Check(g.board.emptiedTotal == 0, "starting over restores every tile");
     Check(g.trail.count == 0, "starting over wipes the trace");
-    Check(g.transition.target == SCREEN_PLAYING, "starting over transitions into play");
+        Check(g.screen == SCREEN_CUTSCENE && !g.cutsceneEnding && g.cutsceneIndex == 0,
+            "starting over begins the opening sequence");
+        UpdateGame(g, 3.5f);
+        Check(g.screen == SCREEN_CUTSCENE && g.cutsceneIndex == 1,
+            "the opening sequence advances through its images in order");
+        UpdateGame(g, 6.5f);
+        Check(g.screen == SCREEN_CUTSCENE && g.cutsceneIndex == 2,
+            "the opening sequence reaches its final image");
+        UpdateGame(g, 3.2f);
+        Check(g.screen == SCREEN_PLAYING,
+            "the opening sequence transitions into gameplay");
+
+        g.transition.active = false;
+        g.screen = SCREEN_ENDING;
+        g.sceneTime = 9.4f;
+        UpdateGame(g, 0.01f);
+        Check(g.screen == SCREEN_CUTSCENE && g.cutsceneEnding && g.cutsceneIndex == 0,
+            "the ending sequence starts after the ending text");
+        UpdateGame(g, 10.2f);
+        Check(g.screen == SCREEN_CREDITS,
+            "the ending sequence transitions to credits");
 
     Game lost;
     InitBoard(lost.board);
@@ -390,7 +414,14 @@ int main()
     lost.ball.pos = { -100.0f, 300.0f };
     Step(lost, 60);
     Check(lost.screen == SCREEN_PLAYING, "falling off the edge does not crash the game");
-    Check(!lost.ball.lost, "the ball is returned to the start after leaving the void");
+        Check(lost.ball.lost, "falling off the edge enters the failure state");
+        const float edgeFailedStageTime = lost.stageTime;
+        Step(lost, 60);
+        Check(lost.ball.lost && lost.stageTime == edgeFailedStageTime,
+            "the stage timer remains frozen beneath the failure message");
+        RestartAttempt(lost, true);
+        Check(!lost.ball.lost && lost.trail.count == 0,
+            "retry returns the ball and clears the failure trace");
 
     {
         const WindowSize sizes[] =

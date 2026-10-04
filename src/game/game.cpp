@@ -11,6 +11,57 @@ namespace {
 constexpr float INTRO_LENGTH = 13.4f;
 
 constexpr float END_OUT = 9.4f;
+constexpr float CUTSCENE_IMAGE_LENGTH = 3.4f;
+
+void BeginCutscene(Game& g, bool ending)
+{
+    g.cutsceneEnding = ending;
+    g.cutsceneIndex = 0;
+    g.cutsceneSkip = false;
+    g.cutsceneInputLock = true;
+    g.cutsceneFade = true;
+    GoToScreen(g, SCREEN_CUTSCENE);
+    g.sceneTime = 0.0f;
+    g.transition.active = true;
+    g.transition.toBlack = false;
+    g.transition.target = SCREEN_CUTSCENE;
+    g.transition.t = 1.0f;
+    g.transition.speed = 2.0f;
+}
+
+void FinishCutscene(Game& g)
+{
+    const Screen target = g.cutsceneEnding ? SCREEN_CREDITS : SCREEN_PLAYING;
+    g.cutsceneInputLock = !g.cutsceneEnding;
+    g.cutsceneSkip = false;
+    g.cutsceneFade = true;
+    GoToScreen(g, target);
+    g.transition.active = true;
+    g.transition.toBlack = false;
+    g.transition.target = target;
+    g.transition.t = 1.0f;
+    g.transition.speed = 2.0f;
+}
+
+void UpdateCutscene(Game& g)
+{
+    if (g.cutsceneSkip)
+    {
+        FinishCutscene(g);
+        return;
+    }
+
+    while (g.sceneTime + 0.0001f >= CUTSCENE_IMAGE_LENGTH)
+    {
+        g.sceneTime = std::max(0.0f, g.sceneTime - CUTSCENE_IMAGE_LENGTH);
+        g.cutsceneIndex++;
+        if (g.cutsceneIndex >= 3)
+        {
+            FinishCutscene(g);
+            return;
+        }
+    }
+}
 
 float EaseInOut(float t)
 {
@@ -39,7 +90,7 @@ void UpdateIntro(Game& g, float dt)
 
 void UpdateEnding(Game& g)
 {
-    if (g.sceneTime >= END_OUT) OpenCredits(g);
+    if (g.sceneTime >= END_OUT) BeginCutscene(g, true);
 }
 
 }
@@ -85,9 +136,8 @@ void StartNewGame(Game& g)
     g.ball.pipValue = 1;
 
     ClearSession();
-
     EnterStage(g, 0);
-    RequestTransition(g, SCREEN_PLAYING, 2.4f);
+    BeginCutscene(g, false);
 }
 
 void ContinueGame(Game& g, bool saved)
@@ -132,7 +182,7 @@ void EnterStage(Game& g, int stage)
 
 void RestartAttempt(Game& g, bool fromEdge)
 {
-    g.trail.MarkGhost();
+    g.trail.Clear();
     ResetBall(g);
     g.stageTime = 0.0f;
     g.attempt++;
@@ -172,7 +222,7 @@ void BeginEnding(Game& g)
 
 void OpenCredits(Game& g)
 {
-    RequestTransition(g, SCREEN_CREDITS, 1.1f);
+    BeginCutscene(g, true);
 }
 
 Layout ComputeLayoutFor(float screenW, float screenH)
@@ -215,6 +265,12 @@ void UpdateGame(Game& g, float dt)
 {
     if (g.screen == SCREEN_HELP) return;
 
+    if (g.screen == SCREEN_PLAYING && g.ball.lost)
+    {
+        g.clock += dt;
+        return;
+    }
+
     g.clock    += dt;
     g.sceneTime += dt;
 
@@ -240,6 +296,7 @@ void UpdateGame(Game& g, float dt)
             {
                 g.transition.t = 0.0f;
                 g.transition.active = false;
+                g.cutsceneFade = false;
             }
         }
     }
@@ -257,15 +314,15 @@ void UpdateGame(Game& g, float dt)
                 g.stageTime += dt;
                 if (g.stageTime >= PASSAGE_TIME_LIMIT)
                 {
-                    RestartAttempt(g, false);
-                    g.story.Say("Time's Up.", 2.4f);
+                    g.ball.lost = true;
+                    g.ball.lostTimer = 0.0f;
+                    g.ball.vel = { 0.0f, 0.0f };
                     break;
                 }
 
                 UpdateBall(g, dt);
                 UpdateTrail(g, dt);
 
-                if (g.ball.lost && g.ball.lostTimer > 0.55f) RestartAttempt(g, true);
                 if (BallInDoor(g))                       AdvanceStage(g);
             }
             break;
@@ -281,6 +338,10 @@ void UpdateGame(Game& g, float dt)
 
         case SCREEN_ENDING:
             UpdateEnding(g);
+            break;
+
+        case SCREEN_CUTSCENE:
+            UpdateCutscene(g);
             break;
 
         default:

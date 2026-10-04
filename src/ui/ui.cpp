@@ -36,6 +36,8 @@ constexpr Color HOVER_TEXT   = { 0x88, 0x08, 0x08, 255 };
 
 int g_buttons = 0;
 int g_focusDelta = 0;
+int g_hoveredControl = -1;
+int g_currentHoveredControl = -1;
 
 bool g_focusArmed = false;
 
@@ -106,6 +108,15 @@ void Label(const Game& g, const char* text, float cx, float y, float size, float
     DrawSpacedCentered(g.font, text, cx, y, size, spacing, color);
 }
 
+void PopOnHover(Game& g, Rectangle bounds, int control)
+{
+    if (!CheckCollisionPointRec(GetMousePosition(), bounds)) return;
+
+    const int id = static_cast<int>(g.screen) * 1000 + control;
+    if (id != g_hoveredControl) sound::Pop();
+    g_currentHoveredControl = id;
+}
+
 }
 
 std::string ResolveItchUrl()
@@ -169,6 +180,8 @@ bool UiButton(Game& g, Rectangle box, const char* label)
     const int slot = g_buttons++;
 
     const bool mouseHover = CheckCollisionPointRec(GetMousePosition(), box);
+    if (g.screen == SCREEN_MENU || g.screen == SCREEN_SETTINGS)
+        PopOnHover(g, box, slot);
     if (mouseHover) g.focus = slot;
 
     if (IsKeyPressed(KEY_DOWN) || IsKeyPressed(KEY_TAB)) g_focusDelta++;
@@ -353,15 +366,18 @@ void DrawSettings(Game& g)
     const float cw = w;
     float y = startY + rowH * 2.0f;
 
+    PopOnHover(g, { x, y, cw, 22.0f }, 100);
     if (GuiSliderBar({ x, y, cw, 22.0f }, "Volume", "0 - 100", &g.settings.volume, 0.0f, 1.0f))
         sound::Pop();
     sound::SetMasterVolume(g.settings.volume);
     y += rowH * 1.35f;
 
+    PopOnHover(g, { x, y, cw, 22.0f }, 101);
     if (GuiSliderBar({ x, y, cw, 22.0f }, "Memory", "less", &g.settings.memory, 0.25f, 1.25f))
         sound::Pop();
     y += rowH * 1.5f;
 
+    PopOnHover(g, { x, y, cw, 24.0f }, 102);
     if (GuiCheckBox({ x, y, cw, 24.0f }, "Skip Intro After First Play", &g.settings.skipIntro))
         sound::Pop();
     y += rowH * 2.4f;
@@ -461,7 +477,31 @@ void LoadBackground(Game& g)
         if (t.id == 0) continue;
         g.bg = t;
         g.bgLoaded = true;
-        return;
+        break;
+    }
+
+    static const char* const images[CUTSCENE_IMAGE_COUNT] =
+    {
+        "start_1.png", "start_2.png", "start_3.png",
+        "end_1.png", "end_2.png", "end_3.png"
+    };
+    static const char* const directories[] =
+    {
+        "assets/animation pics/", "res/assets/animation pics/",
+        "../assets/animation pics/", "../../assets/animation pics/"
+    };
+
+    for (int image = 0; image < CUTSCENE_IMAGE_COUNT; image++)
+    {
+        for (const char* directory : directories)
+        {
+            const std::string path = std::string(directory) + images[image];
+            if (!FileExists(path.c_str())) continue;
+            Texture texture = LoadTexture(path.c_str());
+            if (texture.id == 0) continue;
+            g.cutsceneTextures[image] = texture;
+            break;
+        }
     }
 }
 
@@ -470,6 +510,11 @@ void UnloadBackground(Game& g)
     if (g.bgLoaded) UnloadTexture(g.bg);
     g.bg = {};
     g.bgLoaded = false;
+    for (Texture& texture : g.cutsceneTextures)
+    {
+        if (texture.id != 0) UnloadTexture(texture);
+        texture = {};
+    }
 }
 
 bool UiTextControl(Game& g, Rectangle box, const char* label, float size, float spacing,
@@ -639,6 +684,7 @@ void DrawScreenUi(Game& g)
     g_buttons = 0;
     g_focusDelta = 0;
     g_focusArmed = false;
+    g_currentHoveredControl = -1;
 
     switch (g.screen)
     {
@@ -655,6 +701,8 @@ void DrawScreenUi(Game& g)
         g.focus = std::clamp(g.focus + g_focusDelta, 0, g_buttons - 1);
         if (g.focus == 0 && g_focusDelta < 0) g.focus = g_buttons - 1;
     }
+
+    g_hoveredControl = g_currentHoveredControl;
 }
 
 }

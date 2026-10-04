@@ -115,8 +115,11 @@ enum Screen
     SCREEN_CLEAR,
     SCREEN_ENDING,
     SCREEN_CREDITS,
-    SCREEN_HELP
+    SCREEN_HELP,
+    SCREEN_CUTSCENE
 };
+
+constexpr int CUTSCENE_IMAGE_COUNT = 6;
 
 constexpr int MAX_TILES = 16;
 
@@ -245,6 +248,7 @@ struct Game
     bool  titleFontLoaded = false;
     Texture bg        = {};
     bool  bgLoaded    = false;
+    Texture cutsceneTextures[CUTSCENE_IMAGE_COUNT] = {};
 
     Board    board;
     Ball     ball;
@@ -268,6 +272,11 @@ struct Game
     bool  quitToMenu = false;
     bool  helpInputLock = false;
     int   helpPage = 0;
+    int   cutsceneIndex = 0;
+    bool  cutsceneEnding = false;
+    bool  cutsceneSkip = false;
+    bool  cutsceneInputLock = false;
+    bool  cutsceneFade = false;
 
     int focus = 0;
 

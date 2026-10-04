@@ -24,9 +24,32 @@ void HandleInput(Game& g)
             break;
 
         case SCREEN_PLAYING:
+            if (g.cutsceneInputLock)
+            {
+                const bool movementHeld = IsKeyDown(KEY_A) || IsKeyDown(KEY_D) ||
+                    IsKeyDown(KEY_W) || IsKeyDown(KEY_S) || IsKeyDown(KEY_UP) ||
+                    IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT);
+                if (!movementHeld) g.cutsceneInputLock = false;
+                break;
+            }
             if (IsKeyPressed(KEY_ESCAPE))          GoToScreen(g, SCREEN_PAUSE);
             else if (IsKeyPressed(KEY_R))          RestartAttempt(g, false);
             else if (IsKeyPressed(KEY_P))          GoToScreen(g, SCREEN_PAUSE);
+            break;
+
+        case SCREEN_CUTSCENE:
+            if (g.cutsceneInputLock)
+            {
+                while (GetKeyPressed() != 0) {}
+                const bool inputHeld = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE) ||
+                    IsKeyDown(KEY_KP_ENTER) || IsKeyDown(KEY_A) || IsKeyDown(KEY_D) ||
+                    IsKeyDown(KEY_W) || IsKeyDown(KEY_S) || IsKeyDown(KEY_UP) ||
+                    IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_RIGHT) ||
+                    IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+                if (!inputHeld) g.cutsceneInputLock = false;
+                break;
+            }
+            if (GetKeyPressed() != 0 || anyClick) g.cutsceneSkip = true;
             break;
 
         case SCREEN_HELP:
